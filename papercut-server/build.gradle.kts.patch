@@ -1,0 +1,106 @@
+--- a/folia-server/build.gradle.kts
++++ b/folia-server/build.gradle.kts
+@@ -21,7 +_,7 @@
+ paperweight {
+     minecraftVersion = providers.gradleProperty("mcVersion")
+     gitFilePatches = false
+-    
++
+     val fork = forks.register("folia") {
+         upstream.patchDir("paperServer") {
+             upstreamPath = "paper-server"
+@@ -31,7 +_,22 @@
+         }
+     }
+ 
+-    activeFork = fork
++    val papercut = forks.register("papercut") {
++        forks = fork
++        upstream.patchRepo("paperServer") {
++            upstreamRepo = fork.patchedRepo("paperServer")
++            patchesDir = rootDirectory.dir("papercut-server/paper-patches")
++            outputDir = rootDirectory.dir("paper-server")
++        }
++        upstream.patchDir("foliaServer") {
++            upstreamPath = "folia-server"
++            excludes = setOf("src/minecraft", "paper-patches", "minecraft-patches", "build.gradle.kts", "build.gradle.kts.patch")
++            patchesDir = rootDirectory.dir("papercut-server/folia-patches")
++            outputDir = rootDirectory.dir("folia-server")
++        }
++    }
++
++    activeFork = papercut
+ 
+ 
+     spigot {
+@@ -120,10 +_,14 @@
+     main {
+         java { srcDir("../paper-server/src/main/java"); srcDir("../paper-server/src/generated/java") }
+         resources { srcDir("../paper-server/src/main/resources") }
++        java { srcDir("../folia-server/src/main/java") }
++        resources { srcDir("../folia-server/src/main/resources") }
+     }
+     test {
+         java { srcDir("../paper-server/src/test/java") }
+         resources { srcDir("../paper-server/src/test/resources") }
++        java { srcDir("../folia-server/src/test/java") }
++        resources { srcDir("../folia-server/src/test/resources") }
+     }
+ }
+ val log4jPlugins = sourceSets.create("log4jPlugins") {
+@@ -151,7 +_,7 @@
+ }
+ 
+ dependencies {
+-    implementation(project(":folia-api"))
++    implementation(project(":papercut-api"))
+     implementation("ca.spottedleaf:concurrentutil:0.0.8")
+     implementation("org.jline:jline-terminal-ffm:3.27.1") // use ffm on java 22+
+     implementation("org.jline:jline-terminal-jni:3.27.1") // fall back to jni on java 21
+@@ -208,6 +_,18 @@
+     // Spark
+     implementation("me.lucko:spark-api:0.1-20240720.200737-2")
+     implementation("me.lucko:spark-paper:1.10.152")
++
++    // LinearPaper start
++    implementation("com.github.luben:zstd-jni:1.5.6-6")
++    // LinearPaper end
++
++    implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
++    implementation("io.github.classgraph:classgraph:4.8.158")
++
++    //Idk why plugins wont work without this - Foldenor
++    runtimeOnly("org.apache.maven:maven-resolver-provider:3.9.6")
++    runtimeOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.9.18")
++    runtimeOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.9.18")
+ }
+ 
+ tasks.jar {
+@@ -222,14 +_,14 @@
+         val gitBranch = git.exec(providers, "rev-parse", "--abbrev-ref", "HEAD").get().trim()
+         attributes(
+             "Main-Class" to "org.bukkit.craftbukkit.Main",
+-            "Implementation-Title" to "Folia",
++            "Implementation-Title" to "Papercut",
+             "Implementation-Version" to implementationVersion,
+             "Implementation-Vendor" to date,
+-            "Specification-Title" to "Folia",
++            "Specification-Title" to "Papercut",
+             "Specification-Version" to project.version,
+-            "Specification-Vendor" to "Paper Team",
+-            "Brand-Id" to "papermc:folia",
+-            "Brand-Name" to "Folia",
++            "Specification-Vendor" to "Papercut",
++            "Brand-Id" to "gr1mly4memes:Papercut",
++            "Brand-Name" to "Papercut",
+             "Build-Number" to (build ?: ""),
+             "Build-Time" to buildTime.toString(),
+             "Git-Branch" to gitBranch,
+@@ -317,6 +_,7 @@
+         vendor.set(JvmVendorSpec.JETBRAINS)
+     })
+     jvmArgs("-XX:+AllowEnhancedClassRedefinition")
++    jvmArgs("--add-modules=jdk.incubator.vector")
+ 
+     if (rootProject.childProjects["test-plugin"] != null) {
+         val testPluginJar = rootProject.project(":test-plugin").tasks.jar.flatMap { it.archiveFile }
