@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sat, 21 Feb 2026 08:13:17 -0800
+Subject: [PATCH] Add config
+
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index db1440b09e620ce2aa9441e92b43b0d1ab8ee7a8..29654bce2f9d798c48de7dfbcbc5fb456753581b 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -1053,6 +1053,7 @@ public final class CraftServer implements Server {
+             playerMetadata.removeAll(plugin);
+         }
+         // Paper end
++        gr1mly4memes.papercut.PapercutConfig.init((File) console.options.valueOf("papercut-settings")); // Papercut - Server Config
+         this.reloadData();
+         org.spigotmc.SpigotConfig.registerCommands(); // Spigot
+         io.papermc.paper.command.PaperCommands.registerCommands(this.console); // Paper
+@@ -2778,7 +2779,11 @@ public final class CraftServer implements Server {
+         public YamlConfiguration getPaperConfig() {
+             return CraftServer.this.console.paperConfigurations.createLegacyObject(CraftServer.this.console);
+         }
+-
++        // Papercut start
++        public YamlConfiguration getPapercutConfig() {
++            return gr1mly4memes.papercut.PapercutConfig.config;
++        }
++        // Papercut end
+         @Override
+         public void restart() {
+             CraftServer.this.restart();
+diff --git a/src/main/java/org/bukkit/craftbukkit/Main.java b/src/main/java/org/bukkit/craftbukkit/Main.java
+index 9d4d97fcb0f3cc94e9a263c61cc0e7e58fd322c3..f541cb12875315a2194f9e7f8cca419bee77ba8b 100644
+--- a/src/main/java/org/bukkit/craftbukkit/Main.java
++++ b/src/main/java/org/bukkit/craftbukkit/Main.java
+@@ -168,6 +168,13 @@ public class Main {
+                         .ofType(File.class)
+                         .defaultsTo(new File[] {})
+                         .describedAs("Plugin directory");
++                // Papercut start - Server Config
++                acceptsAll(asList("papercut", "papercut-settings"), "File for papercut settings")
++                        .withRequiredArg()
++                        .ofType(File.class)
++                        .defaultsTo(new File("papercut.yml"))
++                        .describedAs("Yml file");
++                // Papercut end - Server Config
+ 
+                 this.accepts("server-name", "Name of the server")
+                         .withRequiredArg()
