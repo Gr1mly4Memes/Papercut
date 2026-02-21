@@ -1,0 +1,72 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Fri, 20 Feb 2026 21:27:49 -0800
+Subject: [PATCH] Rebrand
+
+
+diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
+index 01758ab2084c0b2d6a10d427ddf0e63753a64bdc..26a9fd255156a24946bf79eaf6b686c27e324b88 100644
+--- a/net/minecraft/server/MinecraftServer.java
++++ b/net/minecraft/server/MinecraftServer.java
+@@ -1364,6 +1364,8 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+             // Paper end
+             org.spigotmc.WatchdogThread.hasStarted = true; // Paper
+             // Paper start - Add onboarding message for initial server start
++            // Papercut start
++            /*
+             if (io.papermc.paper.configuration.GlobalConfiguration.isFirstStart) {
+                 LOGGER.info("*************************************************************************************");
+                 LOGGER.info("This is the first time you're starting this server.");
+@@ -1377,6 +1379,8 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+                 CompletableFuture.runAsync(com.destroystokyo.paper.PaperVersionFetcher::getUpdateStatusStartupMessage, io.papermc.paper.util.MCUtil.ASYNC_EXECUTOR);
+             }
+             // Paper end - Improve outdated version checking
++             */
++            // Papercut end
+ 
+             while (this.running) {
+                 final long tickStart = System.nanoTime(); // Paper - improve tick loop
+diff --git a/net/minecraft/server/gui/MinecraftServerGui.java b/net/minecraft/server/gui/MinecraftServerGui.java
+index f262a7c5ae4e7d56f16f5c0f4f145a2e428abbe4..394033ae2dea1283890466fca581e9bd24fad6f3 100644
+--- a/net/minecraft/server/gui/MinecraftServerGui.java
++++ b/net/minecraft/server/gui/MinecraftServerGui.java
+@@ -46,7 +46,7 @@ public class MinecraftServerGui extends JComponent {
+         } catch (Exception var3) {
+         }
+ 
+-        final JFrame jFrame = new JFrame("Minecraft server");
++        final JFrame jFrame = new JFrame("Papercut Minecraft server"); // Papercut
+         final MinecraftServerGui minecraftServerGui = new MinecraftServerGui(server);
+         jFrame.setDefaultCloseOperation(2);
+         jFrame.add(minecraftServerGui);
+@@ -54,7 +54,7 @@ public class MinecraftServerGui extends JComponent {
+         jFrame.setLocationRelativeTo(null);
+         jFrame.setVisible(true);
+         // Paper start - Improve ServerGUI
+-        jFrame.setName("Minecraft server");
++        jFrame.setName("Papercut Minecraft server"); // Papercut
+         try {
+             jFrame.setIconImage(javax.imageio.ImageIO.read(java.util.Objects.requireNonNull(MinecraftServerGui.class.getClassLoader().getResourceAsStream("logo.png"))));
+         } catch (java.io.IOException ignore) {
+@@ -64,7 +64,7 @@ public class MinecraftServerGui extends JComponent {
+             @Override
+             public void windowClosing(WindowEvent event) {
+                 if (!minecraftServerGui.isClosing.getAndSet(true)) {
+-                    jFrame.setTitle("Minecraft server - shutting down!");
++                    jFrame.setTitle("Papercut Minecraft server - shutting down!"); // Papercut
+                     server.halt(true);
+                     minecraftServerGui.runFinalizers();
+                 }
+diff --git a/net/minecraft/world/level/chunk/storage/RegionFileStorage.java b/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
+index 1e9e061ec694ad64fc2724b83a66dfec7e069a43..3a72ca9a75d4144dbf57c739d6226923f726c7da 100644
+--- a/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
++++ b/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
+@@ -309,7 +309,7 @@ public class RegionFileStorage implements AutoCloseable, ca.spottedleaf.moonrise
+ 
+     // Paper start
+     private static void printOversizedLog(String msg, Path file, int x, int z) {
+-        org.apache.logging.log4j.LogManager.getLogger().fatal(msg + " (" + file.toString().replaceAll(".+[\\\\/]", "") + " - " + x + "," + z + ") Go clean it up to remove this message. /minecraft:tp " + (x<<4)+" 128 "+(z<<4) + " - DO NOT REPORT THIS TO PAPER - You may ask for help on Discord, but do not file an issue. These error messages can not be removed.");
++        org.apache.logging.log4j.LogManager.getLogger().fatal(msg + " (" + file.toString().replaceAll(".+[\\\\/]", "") + " - " + x + "," + z + ") Go clean it up to remove this message. /minecraft:tp " + (x<<4)+" 128 "+(z<<4) + " - DO NOT REPORT THIS TO PAPERCUT -  These error messages can not be removed.");
+     }
+ 
+     private static CompoundTag readOversizedChunk(RegionFile regionfile, ChunkPos chunkCoordinate) throws IOException {
