@@ -84,7 +84,7 @@ public final class PapercutConfig {
         MinecraftServer.getServer().server.syncCommands();
     }
 
-    // Horizon start - region
+    // Papercut start - region
     @GlobalConfig(name = "format", category = "region", lock = true, verify = RegionFormatVerify.class)
     public static EnumRegionFileExtension regionFormat = EnumRegionFileExtension.MCA;
 
@@ -137,10 +137,9 @@ public final class PapercutConfig {
             return Math.max(linearFlushThreads, 1);
         }
     }
-    // Horizon end - region
+    // Papercut end - region
 
-
-
-
-
+    // Papercut start - compatibility
+    @GlobalConfig(name = "legacy-scheduler", category = "compatibility", lock = true)
+    public static boolean legacyScheduler = true;
 }
