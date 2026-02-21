@@ -91,7 +91,7 @@
 -            "Brand-Id" to "papermc:folia",
 -            "Brand-Name" to "Folia",
 +            "Specification-Vendor" to "Papercut",
-+            "Brand-Id" to "gr1mly4memes:Papercut",
++            "Brand-Id" to "gr1mly4memes:papercut",
 +            "Brand-Name" to "Papercut",
              "Build-Number" to (build ?: ""),
              "Build-Time" to buildTime.toString(),
