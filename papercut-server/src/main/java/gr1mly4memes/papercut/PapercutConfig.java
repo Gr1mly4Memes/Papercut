@@ -138,8 +138,4 @@ public final class PapercutConfig {
         }
     }
     // Papercut end - region
-
-    // Papercut start - compatibility
-    @GlobalConfig(name = "legacy-scheduler", category = "compatibility", lock = true)
-    public static boolean legacyScheduler = true;
 }
