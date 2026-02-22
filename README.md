@@ -45,4 +45,5 @@ Papercut includes patches and features from other projects, and without these pr
 
 - [Horizon](https://github.com/GideonWhite1029/Horizon)
 - [Folia](https://github.com/PaperMC/Folia)
+- [Foldenor](https://github.com/Edenor-Minecraft/Foldenor)
 
