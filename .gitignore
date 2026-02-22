@@ -41,3 +41,16 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+build-data/dev-imports.txt
+run
+
+papercut-api/build.gradle.kts
+papercut-server/build.gradle.kts
+papercut-server/src/minecraft
+
+folia-api
+folia-server
+
+paper-api
+paper-server
