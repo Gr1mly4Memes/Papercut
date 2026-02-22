@@ -30,7 +30,6 @@ public final class PapercutSchedulerRouter {
                     delay
             );
         } catch (NoSuchMethodError | UnsupportedOperationException e) {
-        } catch (NoSuchMethodError | UnsupportedOperationException e) {
             // Fallback to global region scheduler
             globalScheduler.runDelayed(
                     plugin,
@@ -38,5 +37,8 @@ public final class PapercutSchedulerRouter {
                     delay
             );
         }
+
+        // Return the original task for compatibility with CraftScheduler expectations
+        return task;
+    }
 }
-        }

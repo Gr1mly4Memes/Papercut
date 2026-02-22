@@ -1,0 +1,319 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sat, 21 Feb 2026 16:36:43 -0800
+Subject: [PATCH] compatibility
+
+
+diff --git a/src/main/java/io/papermc/paper/compat/CompatManager.java b/src/main/java/io/papermc/paper/compat/CompatManager.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..76fdae3b682c8035e8e677e4b691de7eb845134c
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/compat/CompatManager.java
+@@ -0,0 +1,75 @@
++package io.papermc.paper.compat;
++
++import java.util.concurrent.*;
++import java.util.concurrent.atomic.AtomicReference;
++
++/**
++ * Minimal compatibility manager that provides a single-threaded executor to emulate the "main"/plugin thread
++ * for legacy Bukkit/Spigot/Paper plugins when Folia multithreading is in use.
++ *
++ * Controlled via system property: -Dpaper.folia.plugin-compat=true|false (default: true)
++ */
++public final class CompatManager {
++    private static final CompatManager INSTANCE = new CompatManager();
++
++    private final boolean enabled;
++    private final ExecutorService executor;
++    private final AtomicReference<Thread> compatThread = new AtomicReference<>();
++
++    private CompatManager() {
++        this.enabled = Boolean.parseBoolean(System.getProperty("paper.folia.plugin-compat", "true"));
++        if (this.enabled) {
++            ThreadFactory tf = r -> {
++                Thread t = new Thread(r, "Paper-PluginCompat");
++                t.setDaemon(true);
++                compatThread.set(t);
++                return t;
++            };
++            this.executor = Executors.newSingleThreadExecutor(tf);
++        } else {
++            this.executor = null;
++        }
++    }
++
++    public static CompatManager instance() {
++        return INSTANCE;
++    }
++
++    public boolean isEnabled() {
++        return enabled;
++    }
++
++    public boolean isCompatThread() {
++        Thread t = compatThread.get();
++        return t != null && Thread.currentThread() == t;
++    }
++
++    public Future<?> submit(Runnable r) {
++        if (!enabled) {
++            throw new IllegalStateException("CompatManager disabled");
++        }
++        return executor.submit(r);
++    }
++
++    public void submitAndWait(Runnable r) {
++        Future<?> f = submit(r);
++        try {
++            f.get();
++        } catch (InterruptedException e) {
++            Thread.currentThread().interrupt();
++            throw new RuntimeException(e);
++        } catch (ExecutionException e) {
++            // Unwrap
++            Throwable cause = e.getCause();
++            if (cause instanceof RuntimeException) throw (RuntimeException) cause;
++            throw new RuntimeException(cause);
++        }
++    }
++
++    public void shutdownNow() {
++        if (executor != null) {
++            executor.shutdownNow();
++        }
++    }
++}
++
+diff --git a/src/main/java/io/papermc/paper/plugin/manager/PaperEventManager.java b/src/main/java/io/papermc/paper/plugin/manager/PaperEventManager.java
+index 7ce9ebba8ce304d1f3f21d4f15ee5f3560d7700b..3723823fb4b0d1d10f2d6764f7ade95e1e6abdfd 100644
+--- a/src/main/java/io/papermc/paper/plugin/manager/PaperEventManager.java
++++ b/src/main/java/io/papermc/paper/plugin/manager/PaperEventManager.java
+@@ -1,6 +1,7 @@
+ package io.papermc.paper.plugin.manager;
+ 
+-import co.aikar.timings.TimedEventExecutor;
++// timings removed to avoid deprecated API
++
+ import com.destroystokyo.paper.event.server.ServerExceptionEvent;
+ import com.destroystokyo.paper.exception.ServerEventException;
+ import com.google.common.collect.Sets;
+@@ -26,6 +27,8 @@ import java.util.Map;
+ import java.util.Set;
+ import java.util.logging.Level;
+ 
++import io.papermc.paper.compat.CompatManager;
++
+ class PaperEventManager {
+ 
+     private final Server server;
+@@ -36,10 +39,20 @@ class PaperEventManager {
+ 
+     // SimplePluginManager
+     public void callEvent(@NotNull Event event) {
++        // Keep original checks
+         if (event.isAsynchronous() && this.server.isPrimaryThread()) {
+             throw new IllegalStateException(event.getEventName() + " may only be triggered asynchronously.");
+         } else if (!event.isAsynchronous() && !this.server.isPrimaryThread() && !this.server.isStopping()) {
+-            throw new IllegalStateException(event.getEventName() + " may only be triggered synchronously.");
++            // If compat is enabled, route synchronous events to compat executor instead of throwing
++            if (CompatManager.instance().isEnabled()) {
++                // If we're already on the compat thread, proceed
++                if (!CompatManager.instance().isCompatThread()) {
++                    CompatManager.instance().submitAndWait(() -> PaperEventManager.this.callEvent(event));
++                    return;
++                }
++            } else {
++                throw new IllegalStateException(event.getEventName() + " may only be triggered synchronously.");
++            }
+         }
+ 
+         HandlerList handlers = event.getHandlers();
+@@ -95,7 +108,8 @@ class PaperEventManager {
+             throw new IllegalPluginAccessException("Plugin attempted to register " + event + " while not enabled");
+         }
+ 
+-        executor = new TimedEventExecutor(executor, plugin, null, event);
++        // Timings wrapper removed to avoid dependency on deprecated TimedEventExecutor
++        // Keep the provided executor as-is
+         this.getEventListeners(event).register(new RegisteredListener(listener, executor, priority, plugin, ignoreCancelled));
+     }
+ 
+@@ -175,14 +189,14 @@ class PaperEventManager {
+                             plugin.getPluginMeta().getDisplayName(),
+                             clazz.getName(),
+                             method.toGenericString(),
+-                            (warning != null && warning.reason().length() != 0) ? warning.reason() : "Server performance will be affected",
++                            (warning != null && !warning.reason().isEmpty()) ? warning.reason() : "Server performance will be affected",
+                             Arrays.toString(plugin.getPluginMeta().getAuthors().toArray())),
+                         warningState == Warning.WarningState.ON ? new AuthorNagException(null) : null);
+                     break;
+                 }
+             }
+ 
+-            EventExecutor executor = new TimedEventExecutor(EventExecutor.create(method, eventClass), plugin, method, eventClass);
++            EventExecutor executor = EventExecutor.create(method, eventClass);
+             eventSet.add(new RegisteredListener(listener, executor, eh.priority(), plugin, eh.ignoreCancelled()));
+         }
+         return ret;
+diff --git a/src/main/java/io/papermc/paper/plugin/manager/PaperPluginInstanceManager.java b/src/main/java/io/papermc/paper/plugin/manager/PaperPluginInstanceManager.java
+index 578102113c2034ed220a4753ee5b69e0270321ce..633cbe5bc5c7ab2f952158d90c255efd78f2dac9 100644
+--- a/src/main/java/io/papermc/paper/plugin/manager/PaperPluginInstanceManager.java
++++ b/src/main/java/io/papermc/paper/plugin/manager/PaperPluginInstanceManager.java
+@@ -47,6 +47,7 @@ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.core.Appender;
+ import org.apache.logging.log4j.core.LoggerContext;
+ import org.apache.logging.log4j.core.appender.AsyncAppender;
++import io.papermc.paper.compat.CompatManager;
+ 
+ @SuppressWarnings("UnstableApiUsage")
+ class PaperPluginInstanceManager {
+@@ -204,14 +205,19 @@ class PaperPluginInstanceManager {
+             } // Paper
+ 
+             try {
+-                jPlugin.setEnabled(true);
+-            } catch (Throwable ex) {
+-                this.server.getLogger().log(Level.SEVERE, "Error occurred while enabling " + plugin.getPluginMeta().getDisplayName() + " (Is it up to date?)", ex);
+-                // Paper start - Disable plugins that fail to load
+-                this.server.getPluginManager().disablePlugin(jPlugin);
+-                return;
+-                // Paper end
+-            }
++                // Ensure JavaPlugin#onEnable runs on the compat/plugin-main thread when compat is enabled
++                if (CompatManager.instance().isEnabled() && !CompatManager.instance().isCompatThread()) {
++                    CompatManager.instance().submitAndWait(() -> jPlugin.setEnabled(true));
++                } else {
++                    jPlugin.setEnabled(true);
++                }
++             } catch (Throwable ex) {
++                 this.server.getLogger().log(Level.SEVERE, "Error occurred while enabling " + plugin.getPluginMeta().getDisplayName() + " (Is it up to date?)", ex);
++                 // Paper start - Disable plugins that fail to load
++                 this.server.getPluginManager().disablePlugin(jPlugin);
++                 return;
++                 // Paper end
++             }
+ 
+             // Perhaps abort here, rather than continue going, but as it stands,
+             // an abort is not possible the way it's currently written
+@@ -239,7 +245,12 @@ class PaperPluginInstanceManager {
+ 
+             this.server.getPluginManager().callEvent(new PluginDisableEvent(plugin));
+             try {
+-                javaPlugin.setEnabled(false);
++                // Ensure JavaPlugin#onDisable runs on the compat/plugin-main thread when compat is enabled
++                if (CompatManager.instance().isEnabled() && !CompatManager.instance().isCompatThread()) {
++                    CompatManager.instance().submitAndWait(() -> javaPlugin.setEnabled(false));
++                } else {
++                    javaPlugin.setEnabled(false);
++                }
+             } catch (Throwable ex) {
+                 this.server.getLogger().log(Level.SEVERE, "Error occurred while disabling " + pluginName, ex);
+             }
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index 29654bce2f9d798c48de7dfbcbc5fb456753581b..cf0d07457dc13ca196934993bb992b5f8c48e4d2 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -12,6 +12,7 @@ import com.mojang.brigadier.StringReader;
+ import com.mojang.brigadier.exceptions.CommandSyntaxException;
+ import com.mojang.serialization.Dynamic;
+ import com.mojang.serialization.Lifecycle;
++import io.papermc.paper.compat.CompatManager;
+ import io.papermc.paper.configuration.GlobalConfiguration;
+ import io.papermc.paper.configuration.PaperServerConfiguration;
+ import io.papermc.paper.configuration.ServerConfiguration;
+@@ -2346,7 +2347,8 @@ public final class CraftServer implements Server {
+ 
+     @Override
+     public boolean isPrimaryThread() {
+-        return ca.spottedleaf.moonrise.common.util.TickThread.isTickThread(); // Paper - rewrite chunk system
++        // Consider compat/plugin-main thread as primary for plugin lifecycle compatibility
++        return ca.spottedleaf.moonrise.common.util.TickThread.isTickThread() || CompatManager.instance().isCompatThread(); // Paper - rewrite chunk system
+     }
+ 
+     @Override
+@@ -3105,3 +3107,5 @@ public final class CraftServer implements Server {
+     }
+     // Folia end - region TPS API
+ }
++
++
+diff --git a/src/main/java/org/bukkit/craftbukkit/scheduler/CraftScheduler.java b/src/main/java/org/bukkit/craftbukkit/scheduler/CraftScheduler.java
+index b131b935e025370420dde6fe28e95643d008bf5c..ee9811e6502494cde1b0ae61f8a4684a979e9741 100644
+--- a/src/main/java/org/bukkit/craftbukkit/scheduler/CraftScheduler.java
++++ b/src/main/java/org/bukkit/craftbukkit/scheduler/CraftScheduler.java
+@@ -2,6 +2,7 @@ package org.bukkit.craftbukkit.scheduler;
+ 
+ import com.google.common.base.Preconditions;
+ import com.google.common.util.concurrent.ThreadFactoryBuilder;
++import io.papermc.paper.compat.CompatManager;
+ import java.util.ArrayList;
+ import java.util.Comparator;
+ import java.util.Iterator;
+@@ -227,6 +228,47 @@ public class CraftScheduler implements BukkitScheduler {
+         return this.handle(new CraftTask(plugin, runnable, this.nextId(), period), delay);
+     }
+ 
++    // Extract original handle logic to a private method so we can route through compat when required
++    private CraftTask handleOriginal(final CraftTask task, final long delay) {
++        // Paper start
++        if (!this.isAsyncScheduler && !task.isSync()) {
++            this.asyncScheduler.handle(task, delay);
++            return task;
++        }
++        // Paper end
++        task.setNextRun(this.currentTick + delay);
++        this.addTask(task);
++        return task;
++    }
++
++    protected CraftTask handle(final CraftTask task, final long delay) { // Paper
++        // Paper start
++        // If compat is enabled and this is a sync task, ensure scheduling happens on the compat thread.
++        if (task.isSync() && CompatManager.instance().isEnabled()) {
++            if (!CompatManager.instance().isCompatThread()) {
++                CompatManager.instance().submitAndWait(() -> {
++                    // perform original handle logic on compat thread
++                    if (!this.isAsyncScheduler && !task.isSync()) {
++                        this.asyncScheduler.handle(task, delay);
++                        return;
++                    }
++                    task.setNextRun(this.currentTick + delay);
++                    this.addTask(task);
++                });
++                return task;
++            }
++        }
++        // Default/orig behavior
++        if (!this.isAsyncScheduler && !task.isSync()) {
++            this.asyncScheduler.handle(task, delay);
++            return task;
++        }
++        task.setNextRun(this.currentTick + delay);
++        this.addTask(task);
++        return task;
++        // Paper end
++    }
++
+     @Deprecated
+     @Override
+     public int scheduleAsyncRepeatingTask(final Plugin plugin, final Runnable runnable, long delay, long period) {
+@@ -513,18 +555,6 @@ public class CraftScheduler implements BukkitScheduler {
+         tailTask.setNext(task);
+     }
+ 
+-    protected CraftTask handle(final CraftTask task, final long delay) { // Paper
+-        if (true) throw new UnsupportedOperationException(); // Folia - region threading
+-        // Paper start
+-        if (!this.isAsyncScheduler && !task.isSync()) {
+-            this.asyncScheduler.handle(task, delay);
+-            return task;
+-        }
+-        // Paper end
+-        task.setNextRun(this.currentTick + delay);
+-        this.addTask(task);
+-        return task;
+-    }
+ 
+     private static void validate(final Plugin plugin, final Object task) {
+         Preconditions.checkArgument(plugin != null, "Plugin cannot be null");
