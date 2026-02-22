@@ -1,14 +1,13 @@
 --- a/folia-server/build.gradle.kts
 +++ b/folia-server/build.gradle.kts
-@@ -21,7 +_,7 @@
- paperweight {
-     minecraftVersion = providers.gradleProperty("mcVersion")
+@@ -23,6 +_,7 @@
      gitFilePatches = false
--    
-+
+     
      val fork = forks.register("folia") {
++        rootDirectory = upstreamsDirectory().map { it.dir("folia") }
          upstream.patchDir("paperServer") {
              upstreamPath = "paper-server"
+             excludes = setOf("src/minecraft", "patches", "build.gradle.kts")
 @@ -31,7 +_,22 @@
          }
      }
@@ -21,6 +20,7 @@
 +            patchesDir = rootDirectory.dir("papercut-server/paper-patches")
 +            outputDir = rootDirectory.dir("paper-server")
 +        }
++
 +        upstream.patchDir("foliaServer") {
 +            upstreamPath = "folia-server"
 +            excludes = setOf("src/minecraft", "paper-patches", "minecraft-patches", "build.gradle.kts", "build.gradle.kts.patch")
@@ -28,7 +28,6 @@
 +            outputDir = rootDirectory.dir("folia-server")
 +        }
 +    }
-+
 +    activeFork = papercut
  
  
@@ -57,24 +56,26 @@
      implementation("ca.spottedleaf:concurrentutil:0.0.8")
      implementation("org.jline:jline-terminal-ffm:3.27.1") // use ffm on java 22+
      implementation("org.jline:jline-terminal-jni:3.27.1") // fall back to jni on java 21
-@@ -208,6 +_,17 @@
-     // Spark
-     implementation("me.lucko:spark-api:0.1-20240720.200737-2")
-     implementation("me.lucko:spark-paper:1.10.152")
-+
-+    // Papercut start
-+    implementation("com.github.luben:zstd-jni:1.5.7-3")
-+    implementation("at.yawk.lz4:lz4-java:1.10.1")
-+    implementation("net.openhft:zero-allocation-hashing:0.16")
-+    // Papercut end
-+
-+    //Idk why plugins wont work without this - Foldenor
-+    runtimeOnly("org.apache.maven:maven-resolver-provider:3.9.6")
-+    runtimeOnly("org.apache.maven.resolver:maven-resolver-connector-basic:1.9.18")
-+    runtimeOnly("org.apache.maven.resolver:maven-resolver-transport-http:1.9.18")
- }
+@@ -164,8 +_,8 @@
+       all its classes to check if they are plugins.
+       Scanning takes about 1-2 seconds so adding this speeds up the server start.
+      */
+-    implementation("org.apache.logging.log4j:log4j-core:2.24.1")
+-    log4jPlugins.annotationProcessorConfigurationName("org.apache.logging.log4j:log4j-core:2.24.1") // Needed to generate meta for our Log4j plugins
++    implementation("org.apache.logging.log4j:log4j-core:2.24.3")  // Papercut Bump
++    log4jPlugins.annotationProcessorConfigurationName("org.apache.logging.log4j:log4j-core:2.24.3") // Needed to generate meta for our Log4j plugins // Papercut Bump
+     runtimeOnly(log4jPlugins.output)
+     alsoShade(log4jPlugins.output)
  
- tasks.jar {
+@@ -173,7 +_,7 @@
+         isTransitive = false
+     }
+     implementation("io.netty:netty-codec-haproxy:4.2.7.Final") // Add support for proxy protocol
+-    implementation("org.apache.logging.log4j:log4j-iostreams:2.24.1")
++    implementation("org.apache.logging.log4j:log4j-iostreams:2.24.3") // Papercut Bump
+     implementation("org.ow2.asm:asm-commons:9.8")
+     implementation("org.spongepowered:configurate-yaml:4.2.0")
+ 
 @@ -222,14 +_,14 @@
          val gitBranch = git.exec(providers, "rev-parse", "--abbrev-ref", "HEAD").get().trim()
          attributes(
@@ -89,17 +90,9 @@
 -            "Specification-Vendor" to "Paper Team",
 -            "Brand-Id" to "papermc:folia",
 -            "Brand-Name" to "Folia",
-+            "Specification-Vendor" to "Papercut",
++            "Specification-Vendor" to "Gr1mly4Memes",
 +            "Brand-Id" to "gr1mly4memes:papercut",
 +            "Brand-Name" to "Papercut",
              "Build-Number" to (build ?: ""),
              "Build-Time" to buildTime.toString(),
              "Git-Branch" to gitBranch,
-@@ -317,6 +_,7 @@
-         vendor.set(JvmVendorSpec.JETBRAINS)
-     })
-     jvmArgs("-XX:+AllowEnhancedClassRedefinition")
-+    jvmArgs("--add-modules=jdk.incubator.vector")
- 
-     if (rootProject.childProjects["test-plugin"] != null) {
-         val testPluginJar = rootProject.project(":test-plugin").tasks.jar.flatMap { it.archiveFile }
