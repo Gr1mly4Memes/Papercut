@@ -1,0 +1,78 @@
+--- a/folia-api/build.gradle.kts
++++ b/folia-api/build.gradle.kts
+@@ -15,7 +_,7 @@
+ val adventureVersion = "4.25.0"
+ val bungeeCordChatVersion = "1.21-R0.2-deprecated+build.21"
+ val slf4jVersion = "2.0.16"
+-val log4jVersion = "2.24.1"
++val log4jVersion = "2.24.3" // Papercut Bump
+ 
+ val apiAndDocs: Configuration by configurations.creating {
+     attributes {
+@@ -42,9 +_,9 @@
+ 
+ dependencies {
+     // api dependencies are listed transitively to API consumers
+-    api("com.google.guava:guava:33.3.1-jre")
++    api("com.google.guava:guava:33.4.0-jre") // Papercut Bump
+     api("com.google.code.gson:gson:2.11.0")
+-    api("org.yaml:snakeyaml:2.2")
++    api("org.yaml:snakeyaml:2.3") // Papercut Bump
+     api("org.joml:joml:1.10.8") {
+         isTransitive = false // https://github.com/JOML-CI/JOML/issues/352
+     }
+@@ -102,17 +_,21 @@
+         java {
+             srcDir(generatedDir)
+             srcDir(file("../paper-api/src/main/java"))
++            srcDir(file("../folia-api/src/main/java"))
+         }
+         resources {
+             srcDir(file("../paper-api/src/main/resources"))
++            srcDir(file("../folia-api/src/main/resources"))
+         }
+     }
+     test {
+         java {
+             srcDir(file("../paper-api/src/test/java"))
++            srcDir(file("../folia-api/src/test/java"))
+         }
+         resources {
+             srcDir(file("../paper-api/src/test/resources"))
++            srcDir(file("../folia-api/src/test/resources"))
+         }
+     }
+ }
+@@ -199,8 +_,8 @@
+     options.use()
+     options.isDocFilesSubDirs = true
+     options.links(
+-        "https://guava.dev/releases/33.3.1-jre/api/docs/",
+-        "https://www.javadocs.dev/org.yaml/snakeyaml/2.2/",
++        "https://guava.dev/releases/33.4.0-jre/api/docs/", // Papercut Bump
++        "https://www.javadocs.dev/org.yaml/snakeyaml/2.3/", // Papercut Bump
+         "https://www.javadocs.dev/org.jetbrains/annotations/$annotationsVersion/",
+         "https://www.javadocs.dev/org.joml/joml/1.10.8/",
+         "https://www.javadocs.dev/com.google.code.gson/gson/2.11.0",
+@@ -252,6 +_,12 @@
+ // Compile tests with -parameters for better junit parameterized test names
+ tasks.compileTestJava {
+     options.compilerArgs.add("-parameters")
++    options.compilerArgs.add("-Xlint:-deprecation")
++    options.isWarnings = false
++}
++tasks.compileJava {
++    options.compilerArgs.add("-Xlint:-deprecation")
++    options.isWarnings = false
+ }
+ 
+ val scanJarForBadCalls by tasks.registering(io.papermc.paperweight.tasks.ScanJarForBadCalls::class) {
+@@ -261,4 +_,8 @@
+ }
+ tasks.check {
+     dependsOn(scanJarForBadCalls)
++}
++tasks.withType<JavaCompile> {
++    val compilerArgs = options.compilerArgs
++    compilerArgs.add("--add-modules=jdk.incubator.vector")
+ }
