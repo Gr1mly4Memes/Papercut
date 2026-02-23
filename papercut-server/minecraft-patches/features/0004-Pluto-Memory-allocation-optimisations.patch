@@ -1,0 +1,2335 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sun, 22 Feb 2026 17:41:49 -0800
+Subject: [PATCH] Pluto Memory allocation optimisations
+
+
+diff --git a/ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.java b/ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.java
+index cc67d950846bdd45271024701f24dc8d7b79c889..395fb9c0a3b4795a8d9a5b33293f2e1c061dacf3 100644
+--- a/ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.java
++++ b/ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.java
+@@ -498,6 +498,80 @@ public final class CollisionUtil {
+ 
+         return false;
+     }
++    // Papercut
++    public static boolean papercut$voxelShapeIntersectNoEmpty(final VoxelShape voxel, final double minX, final double minY, final double minZ, final double maxX, final double maxY, final double maxZ) {
++        if (voxel.isEmpty()) {
++            return false;
++        }
++        final double off_x = ((CollisionVoxelShape)voxel).moonrise$offsetX();
++        final double off_y = ((CollisionVoxelShape)voxel).moonrise$offsetY();
++        final double off_z = ((CollisionVoxelShape)voxel).moonrise$offsetZ();
++        final double[] coords_x = ((CollisionVoxelShape)voxel).moonrise$rootCoordinatesX();
++        final double[] coords_y = ((CollisionVoxelShape)voxel).moonrise$rootCoordinatesY();
++        final double[] coords_z = ((CollisionVoxelShape)voxel).moonrise$rootCoordinatesZ();
++        final CachedShapeData cached_shape_data = ((CollisionVoxelShape)voxel).moonrise$getCachedVoxelData();
++        final int size_x = cached_shape_data.sizeX();
++        final int size_y = cached_shape_data.sizeY();
++        final int size_z = cached_shape_data.sizeZ();
++        final int floor_min_x = Math.max(
++                0,
++                findFloor(coords_x, off_x, minX + COLLISION_EPSILON, 0, size_x)
++        );
++        if (floor_min_x >= size_x) {
++            return false;
++        }
++        final int ceil_max_x = Math.min(
++                size_x,
++                findFloor(coords_x, off_x, maxX - COLLISION_EPSILON, floor_min_x, size_x) + 1
++        );
++        if (floor_min_x >= ceil_max_x) {
++            return false;
++        }
++        final int floor_min_y = Math.max(
++                0,
++                findFloor(coords_y, off_y, minY + COLLISION_EPSILON, 0, size_y)
++        );
++        if (floor_min_y >= size_y) {
++            return false;
++        }
++        final int ceil_max_y = Math.min(
++                size_y,
++                findFloor(coords_y, off_y, maxY - COLLISION_EPSILON, floor_min_y, size_y) + 1
++        );
++        if (floor_min_y >= ceil_max_y) {
++            return false;
++        }
++        final int floor_min_z = Math.max(
++                0,
++                findFloor(coords_z, off_z, minZ + COLLISION_EPSILON, 0, size_z)
++        );
++        if (floor_min_z >= size_z) {
++            return false;
++        }
++        final int ceil_max_z = Math.min(
++                size_z,
++                findFloor(coords_z, off_z, maxZ - COLLISION_EPSILON, floor_min_z, size_z) + 1
++        );
++        if (floor_min_z >= ceil_max_z) {
++            return false;
++        }
++        final long[] bitset = cached_shape_data.voxelSet();
++
++        final int mul_x = size_y*size_z;
++        for (int curr_x = floor_min_x; curr_x < ceil_max_x; ++curr_x) {
++            for (int curr_y = floor_min_y; curr_y < ceil_max_y; ++curr_y) {
++                for (int curr_z = floor_min_z; curr_z < ceil_max_z; ++curr_z) {
++                    final int index = curr_z + curr_y*size_z + curr_x*mul_x;
++                    // note: JLS states long shift operators ANDS shift by 63
++                    if ((bitset[index >>> 6] & (1L << index)) != 0L) {
++                        return true;
++                    }
++                }
++            }
++        }
++        return false;
++    }
++    // Papercut
+ 
+     // assume !target.isEmpty() && abs(source_move) >= COLLISION_EPSILON
+     public static double collideX(final VoxelShape target, final AABB source, final double source_move) {
+diff --git a/net/minecraft/core/Direction.java b/net/minecraft/core/Direction.java
+index 9926682586fda91017e3e1ab079296a8c4a88879..befb4d0548ac2afdc7d7f310496aa3b62340fcba 100644
+--- a/net/minecraft/core/Direction.java
++++ b/net/minecraft/core/Direction.java
+@@ -56,7 +56,7 @@ public enum Direction implements StringRepresentable, ca.spottedleaf.moonrise.pa
+     private final Vec3i normal;
+     private final Vec3 normalVec3;
+     private final Vector3fc normalVec3f;
+-    private static final Direction[] VALUES = values();
++    public static final Direction[] VALUES = values();
+     private static final Direction[] BY_3D_DATA = Arrays.stream(VALUES)
+         .sorted(Comparator.comparingInt(direction -> direction.data3d))
+         .toArray(Direction[]::new);
+@@ -630,7 +630,7 @@ public enum Direction implements StringRepresentable, ca.spottedleaf.moonrise.pa
+         HORIZONTAL(new Direction[]{Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST}, new Direction.Axis[]{Direction.Axis.X, Direction.Axis.Z}),
+         VERTICAL(new Direction[]{Direction.UP, Direction.DOWN}, new Direction.Axis[]{Direction.Axis.Y});
+ 
+-        private final Direction[] faces;
++        public final Direction[] faces;
+         private final Direction.Axis[] axis;
+ 
+         private Plane(final Direction[] faces, final Direction.Axis[] axis) {
+diff --git a/net/minecraft/core/cauldron/CauldronInteraction.java b/net/minecraft/core/cauldron/CauldronInteraction.java
+index c58b4a5426dc2e502e240e9b9270ead2ef65ecbd..2d92f18513d7fe6726d84a8d87b0c366e6cbc2dd 100644
+--- a/net/minecraft/core/cauldron/CauldronInteraction.java
++++ b/net/minecraft/core/cauldron/CauldronInteraction.java
+@@ -388,7 +388,7 @@ public interface CauldronInteraction {
+     }
+ 
+     private static boolean isUnderWater(Level level, BlockPos pos) {
+-        FluidState fluidState = level.getFluidState(pos.above());
++        FluidState fluidState = level.papercut$getFluidState(pos.getX(), pos.getY() + 1, pos.getZ()); // Papercut
+         return fluidState.is(FluidTags.WATER);
+     }
+ 
+diff --git a/net/minecraft/server/level/WorldGenRegion.java b/net/minecraft/server/level/WorldGenRegion.java
+index faf1505b0424c609552b5f015df4e9bb2c0c6bf2..11d0e6610b1a85264d8506d9de56f1fbaf603c8d 100644
+--- a/net/minecraft/server/level/WorldGenRegion.java
++++ b/net/minecraft/server/level/WorldGenRegion.java
+@@ -209,6 +209,42 @@ public class WorldGenRegion implements WorldGenLevel {
+         return chunk == null ? null : chunk.getFluidState(pos);
+     }
+     // Paper end
++    // Papercut
++    @Override
++    public BlockState papercut$getBlockState(int x, int y, int z) {
++        return this.getChunk(x >> 4, z >> 4).getBlockState(x, y, z);
++    }
++    @Override
++    public BlockState papercut$getBlockState(long packedPos) {
++        return papercut$getBlockState(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public @Nullable BlockState papercut$getBlockStateIfLoaded(int x, int y, int z) {
++        ChunkAccess chunk = this.getChunkIfLoadedImmediately(x >> 4, z >> 4);
++        return chunk == null ? null : chunk.getBlockState(x, y, z);
++    }
++    @Override
++    public @Nullable BlockState papercut$getBlockStateIfLoaded(long packedPos) {
++        return papercut$getBlockStateIfLoaded(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public FluidState papercut$getFluidState(int x, int y, int z) {
++        return this.getChunk(x >> 4, z >> 4).papercut$getFluidState(x, y, z);
++    }
++    @Override
++    public FluidState papercut$getFluidState(long packedPos) {
++        return papercut$getFluidState(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public @Nullable FluidState papercut$getFluidStateIfLoaded(int x, int y, int z) {
++        ChunkAccess chunk = this.getChunkIfLoadedImmediately(x >> 4, z >> 4);
++        return chunk == null ? null : chunk.papercut$getFluidState(x, y, z);
++    }
++    @Override
++    public @Nullable FluidState papercut$getFluidStateIfLoaded(long packedPos) {
++        return papercut$getFluidStateIfLoaded(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    // Papercut
+ 
+     @Override
+     public BlockState getBlockState(BlockPos pos) {
+diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
+index a298b9babb6b42ff31781808821acd28918d7cb7..c9cd67027f0f70dea73a194ef75bbe7332bed4c8 100644
+--- a/net/minecraft/world/entity/Entity.java
++++ b/net/minecraft/world/entity/Entity.java
+@@ -1212,10 +1212,13 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
+                 this.minorHorizontalCollision = false;
+             }
+ 
+-            BlockPos onPosLegacy = this.getOnPosLegacy();
+-            BlockState blockState = this.level().getBlockState(onPosLegacy);
++            // Papercut
++            long onPosLegacyLong = this.papercut$getOnPosLegacy();
++            BlockPos onPosLegacy = null;
++            BlockState blockState = this.level().papercut$getBlockState(onPosLegacyLong);
+             if (this.isLocalInstanceAuthoritative()) {
+-                this.checkFallDamage(vec3.y, this.onGround(), blockState, onPosLegacy);
++                this.checkFallDamage(vec3.y, this.onGround(), blockState, onPosLegacy = BlockPos.of(onPosLegacyLong));
++                // Papercut
+             }
+ 
+             if (this.isRemoved()) {
+@@ -1257,7 +1260,7 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
+                 if (!this.level().isClientSide() || this.isLocalInstanceAuthoritative()) {
+                     Entity.MovementEmission movementEmission = this.getMovementEmission();
+                     if (movementEmission.emitsAnything() && !this.isPassenger()) {
+-                        this.applyMovementEmissionAndPlaySound(movementEmission, vec3, onPosLegacy, blockState);
++                        this.applyMovementEmissionAndPlaySound(movementEmission, vec3, onPosLegacy == null ? BlockPos.of(onPosLegacyLong) : onPosLegacy, blockState); // Papercut
+                     }
+                 }
+ 
+@@ -1279,12 +1282,16 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
+         float f = 0.6F;
+         float f1 = (float)(movement.length() * 0.6F);
+         float f2 = (float)(movement.horizontalDistance() * 0.6F);
+-        BlockPos onPos = this.getOnPos();
+-        BlockState blockState = this.level().getBlockState(onPos);
++        // Papercut
++        long onPosLong = this.papercut$getOnPos();
++        BlockPos onPos;
++        BlockState blockState = this.level().papercut$getBlockState(onPosLong);
++        // Papercut
+         boolean isStateClimbable = this.isStateClimbable(blockState);
+         this.moveDist += isStateClimbable ? f1 : f2;
+         this.flyDist += f1;
+         if (this.moveDist > this.nextStep && !blockState.isAir()) {
++            onPos = BlockPos.of(onPosLong); // Papercut
+             boolean flag = onPos.equals(pos);
+             boolean flag1 = this.vibrationAndSoundEffectsFromBlock(pos, state, movementEmission.emitsSounds(), flag, movement);
+             if (!flag) {
+@@ -1477,10 +1484,42 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
+             return new BlockPos(floor, floor1, floor2);
+         }
+     }
++    // Papercut
++    @Deprecated
++    public long papercut$getOnPosLegacy() {
++        return this.papercut$getOnPos(DELTA_AFFECTED_BY_BLOCKS_BELOW_0_2);
++    }
++    public long papercut$getOnPos() {
++        return this.papercut$getOnPos(Mth.EPSILON);
++    }
++    public long papercut$getBlockPosBelowThatAffectsMyMovement() {
++        return this.papercut$getOnPos((float) DELTA_AFFECTED_BY_BLOCKS_BELOW_0_5);
++    }
++    protected long papercut$getOnPos(float offset) {
++        supportingPosPresent:
++        if (this.mainSupportingBlockPos.isPresent()) {
++            final BlockPos getOnPos = this.mainSupportingBlockPos.get();
++            final net.minecraft.world.level.chunk.ChunkAccess chunk = this.level().getChunkIfLoadedImmediately(getOnPos); // Paper - ensure no loads
++            if (chunk == null) {
++                break supportingPosPresent;
++            }
++            if (!(offset > Mth.EPSILON)) {
++                return getOnPos.asLong();
++            }
++            final BlockState belowState = chunk.getBlockState(getOnPos);
++            return (!(offset <= 0.5) || !belowState.is(BlockTags.FENCES))
++                    && !belowState.is(BlockTags.WALLS)
++                    && !(belowState.getBlock() instanceof FenceGateBlock)
++                    ? BlockPos.asLong(getOnPos.getX(), Mth.floor(this.position.y - offset), getOnPos.getZ())
++                    : getOnPos.asLong();
++        }
++        return BlockPos.asLong(Mth.floor(this.position.x), Mth.floor(this.position.y - offset), Mth.floor(this.position.z));
++    }
++    // Papercut
+ 
+     protected float getBlockJumpFactor() {
+         float jumpFactor = this.level().getBlockState(this.blockPosition()).getBlock().getJumpFactor();
+-        float jumpFactor1 = this.level().getBlockState(this.getBlockPosBelowThatAffectsMyMovement()).getBlock().getJumpFactor();
++        float jumpFactor1 = this.level().papercut$getBlockState(this.papercut$getBlockPosBelowThatAffectsMyMovement()).getBlock().getJumpFactor(); // Papercut
+         return jumpFactor == 1.0 ? jumpFactor1 : jumpFactor;
+     }
+ 
+@@ -1488,7 +1527,7 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
+         BlockState blockState = this.level().getBlockState(this.blockPosition());
+         float speedFactor = blockState.getBlock().getSpeedFactor();
+         if (!blockState.is(Blocks.WATER) && !blockState.is(Blocks.BUBBLE_COLUMN)) {
+-            return speedFactor == 1.0 ? this.level().getBlockState(this.getBlockPosBelowThatAffectsMyMovement()).getBlock().getSpeedFactor() : speedFactor;
++            return speedFactor == 1.0 ? this.level().papercut$getBlockState(this.papercut$getBlockPosBelowThatAffectsMyMovement()).getBlock().getSpeedFactor() : speedFactor; // Papercut
+         } else {
+             return speedFactor;
+         }
+@@ -1853,9 +1892,10 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
+     }
+ 
+     protected BlockPos getPrimaryStepSoundBlockPos(BlockPos pos) {
+-        BlockPos blockPos = pos.above();
+-        BlockState blockState = this.level().getBlockState(blockPos);
+-        return !blockState.is(BlockTags.INSIDE_STEP_SOUND_BLOCKS) && !blockState.is(BlockTags.COMBINATION_STEP_SOUND_BLOCKS) ? pos : blockPos;
++        // Papercut
++        BlockState blockState = this.level().papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ());
++        return !blockState.is(BlockTags.INSIDE_STEP_SOUND_BLOCKS) && !blockState.is(BlockTags.COMBINATION_STEP_SOUND_BLOCKS) ? pos : pos.above();
++        // Papercut
+     }
+ 
+     protected void playCombinationStepSounds(BlockState primaryState, BlockState secondaryState) {
+@@ -2134,11 +2174,11 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
+ 
+     @Deprecated
+     protected BlockState getBlockStateOnLegacy() {
+-        return this.level().getBlockState(this.getOnPosLegacy());
++        return this.level().papercut$getBlockState(this.papercut$getOnPosLegacy()); // Papercut
+     }
+ 
+     public BlockState getBlockStateOn() {
+-        return this.level().getBlockState(this.getOnPos());
++        return this.level().papercut$getBlockState(this.papercut$getOnPos()); // Papercut
+     }
+ 
+     public boolean canSpawnSprintParticle() {
+@@ -2146,19 +2186,25 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
+     }
+ 
+     protected void spawnSprintParticle() {
+-        BlockPos onPosLegacy = this.getOnPosLegacy();
+-        BlockState blockState = this.level().getBlockState(onPosLegacy);
++        // Papercut
++        long onPosLegacy = this.papercut$getOnPosLegacy();
++        BlockState blockState = this.level().papercut$getBlockState(onPosLegacy);
++        // Papercut
+         if (blockState.getRenderShape() != RenderShape.INVISIBLE) {
+             Vec3 deltaMovement = this.getDeltaMovement();
+             BlockPos blockPos = this.blockPosition();
+             double d = this.getX() + (this.random.nextDouble() - 0.5) * this.dimensions.width();
+             double d1 = this.getZ() + (this.random.nextDouble() - 0.5) * this.dimensions.width();
+-            if (blockPos.getX() != onPosLegacy.getX()) {
+-                d = Mth.clamp(d, (double)onPosLegacy.getX(), onPosLegacy.getX() + 1.0);
++            // Papercut
++            final int x = BlockPos.getX(onPosLegacy);
++            if (blockPos.getX() != x) {
++                d = Mth.clamp(d, (double)x, x + 1.0);
+             }
+ 
+-            if (blockPos.getZ() != onPosLegacy.getZ()) {
+-                d1 = Mth.clamp(d1, (double)onPosLegacy.getZ(), onPosLegacy.getZ() + 1.0);
++            final int z = BlockPos.getZ(onPosLegacy);
++            if (blockPos.getZ() != z) {
++                d1 = Mth.clamp(d1, (double)z, z + 1.0);
++                // Papercut
+             }
+ 
+             this.level()
+diff --git a/net/minecraft/world/entity/ExperienceOrb.java b/net/minecraft/world/entity/ExperienceOrb.java
+index f2ec0bd8cca3c08d558790537e17a8a2f95f1953..8576a32550de273a0d135d172d0c497e4672de39 100644
+--- a/net/minecraft/world/entity/ExperienceOrb.java
++++ b/net/minecraft/world/entity/ExperienceOrb.java
+@@ -180,7 +180,7 @@ public class ExperienceOrb extends Entity {
+             this.applyEffectsFromBlocks();
+             float f = 0.98F;
+             if (this.onGround()) {
+-                f = this.level().getBlockState(this.getBlockPosBelowThatAffectsMyMovement()).getBlock().getFriction() * 0.98F;
++                f = this.level().papercut$getBlockState(this.papercut$getBlockPosBelowThatAffectsMyMovement()).getBlock().getFriction() * 0.98F; // Papercut
+             }
+ 
+             this.setDeltaMovement(this.getDeltaMovement().scale(f));
+@@ -239,6 +239,12 @@ public class ExperienceOrb extends Entity {
+     public BlockPos getBlockPosBelowThatAffectsMyMovement() {
+         return this.getOnPos(0.999999F);
+     }
++    // Papercut
++    @Override
++    public long papercut$getBlockPosBelowThatAffectsMyMovement() {
++        return this.papercut$getOnPos((float) DELTA_AFFECTED_BY_BLOCKS_BELOW_1_0);
++    }
++    // Papercut
+ 
+     private void scanForMerges() {
+         if (this.level() instanceof ServerLevel) {
+diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
+index f6599a577ceb745af957c395bacbf4d097f61010..118bd5a16bc491dc30eddc9a75c6c968dbe622dd 100644
+--- a/net/minecraft/world/entity/LivingEntity.java
++++ b/net/minecraft/world/entity/LivingEntity.java
+@@ -473,7 +473,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+             }
+ 
+             if (this.isEyeInFluid(FluidTags.WATER)
+-                && !serverLevel1.getBlockState(BlockPos.containing(this.getX(), this.getEyeY(), this.getZ())).is(Blocks.BUBBLE_COLUMN)) {
++                    && !serverLevel1.papercut$getBlockState(Mth.floor(this.getX()), Mth.floor(this.getEyeY()), Mth.floor(this.getZ())).is(Blocks.BUBBLE_COLUMN)) { // Papercut
+                 boolean flag1 = !this.canBreatheUnderwater()
+                     && !MobEffectUtil.hasWaterBreathing(this)
+                     && (!flag || !((Player)this).getAbilities().invulnerable);
+@@ -3084,15 +3084,17 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+     }
+ 
+     private void travelInAir(Vec3 travelVector) {
+-        BlockPos blockPosBelowThatAffectsMyMovement = this.getBlockPosBelowThatAffectsMyMovement();
+-        float f = this.onGround() ? this.level().getBlockState(blockPosBelowThatAffectsMyMovement).getBlock().getFriction() : 1.0F;
++        // Papercut
++        long blockPosBelowThatAffectsMyMovement = this.papercut$getBlockPosBelowThatAffectsMyMovement();
++        float f = this.onGround() ? this.level().papercut$getBlockState(blockPosBelowThatAffectsMyMovement).getBlock().getFriction() : 1.0F;
++        // Papercut
+         float f1 = f * 0.91F;
+         Vec3 vec3 = this.handleRelativeFrictionAndCalculateMovement(travelVector, f);
+         double d = vec3.y;
+         MobEffectInstance effect = this.getEffect(MobEffects.LEVITATION);
+         if (effect != null) {
+             d += (0.05 * (effect.getAmplifier() + 1) - vec3.y) * 0.2;
+-        } else if (!this.level().isClientSide() || this.level().hasChunkAt(blockPosBelowThatAffectsMyMovement)) {
++        } else if (!this.level().isClientSide() || this.level().hasChunkAt(BlockPos.getX(blockPosBelowThatAffectsMyMovement) >> 4, BlockPos.getZ(blockPosBelowThatAffectsMyMovement) >> 4)) { // Papercut
+             d -= this.getEffectiveGravity();
+         } else if (this.getY() > this.level().getMinY()) {
+             d = -0.1;
+@@ -4463,14 +4465,15 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+         if (ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor((ServerLevel)level, blockPos) && level.hasChunkAt(blockPos)) { // Folia - region threading
+             boolean flag1 = false;
+ 
+-            while (!flag1 && blockPos.getY() > level.getMinY()) {
+-                BlockPos blockPos1 = blockPos.below();
+-                BlockState blockState = level.getBlockState(blockPos1);
++            // Papercut
++            while (!flag1 && y2 > level.getMinY()) {
++                BlockState blockState = chunk.getBlockState(x2, y2 - 1, z2); // Pluto - Decrease chunk/block lookups
++                // Papercut
+                 if (blockState.blocksMotion()) {
+                     flag1 = true;
+                 } else {
+                     d--;
+-                    blockPos = blockPos1;
++                    y2--;
+                 }
+             }
+ 
+@@ -4612,8 +4615,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+                 Direction direction = blockState.getValue(BedBlock.FACING);
+                 this.level().setBlock(blockPos, blockState.setValue(BedBlock.OCCUPIED, false), Block.UPDATE_ALL);
+                 Vec3 vec31 = BedBlock.findStandUpPosition(this.getType(), this.level(), blockPos, direction, this.getYRot()).orElseGet(() -> {
+-                    BlockPos blockPos1 = blockPos.above();
+-                    return new Vec3(blockPos1.getX() + 0.5, blockPos1.getY() + 0.1, blockPos1.getZ() + 0.5);
++                    return new Vec3(blockPos.getX() + 0.5, blockPos.getY() + 1.1, blockPos.getZ() + 0.5); // Papercut
+                 });
+                 Vec3 vec32 = Vec3.atBottomCenterOf(blockPos).subtract(vec31).normalize();
+                 float f = (float)Mth.wrapDegrees(Mth.atan2(vec32.z, vec32.x) * 180.0F / (float)Math.PI - 90.0);
+diff --git a/net/minecraft/world/entity/Mob.java b/net/minecraft/world/entity/Mob.java
+index a10bff4f894e93a5307a76982adb145965da1030..87bab0ef1c2451818935f6cab4170d2c5c13a30b 100644
+--- a/net/minecraft/world/entity/Mob.java
++++ b/net/minecraft/world/entity/Mob.java
+@@ -590,12 +590,11 @@ public abstract class Mob extends LivingEntity implements EquipmentUser, Leashab
+     public boolean isSunBurnTick() {
+         if (!this.level().isClientSide() && this.level().environmentAttributes().getValue(EnvironmentAttributes.MONSTERS_BURN, this.position())) {
+             float lightLevelDependentMagicValue = this.getLightLevelDependentMagicValue();
+-            BlockPos blockPos = BlockPos.containing(this.getX(), this.getEyeY(), this.getZ());
+             boolean flag = this.isInWaterOrRain() || this.isInPowderSnow || this.wasInPowderSnow;
+             if (lightLevelDependentMagicValue > 0.5F
+                 && this.random.nextFloat() * 30.0F < (lightLevelDependentMagicValue - 0.4F) * 2.0F
+                 && !flag
+-                && this.level().canSeeSky(blockPos)) {
++                    && this.level().canSeeSky(BlockPos.containing(this.getX(), this.getEyeY(), this.getZ()))) { // Papercut
+                 return true;
+             }
+         }
+diff --git a/net/minecraft/world/entity/SpawnPlacementTypes.java b/net/minecraft/world/entity/SpawnPlacementTypes.java
+index c51a087a46b5f702c6a2b3adf4de6a6d58fcbc2c..3e6d83ddb82fc6c00ea15ef8d9b528e172b1ffa1 100644
+--- a/net/minecraft/world/entity/SpawnPlacementTypes.java
++++ b/net/minecraft/world/entity/SpawnPlacementTypes.java
+@@ -12,8 +12,10 @@ public interface SpawnPlacementTypes {
+     SpawnPlacementType NO_RESTRICTIONS = (level, pos, entityType) -> true;
+     SpawnPlacementType IN_WATER = (level, pos, entityType) -> {
+         if (entityType != null && level.getWorldBorder().isWithinBounds(pos)) {
+-            BlockPos blockPos = pos.above();
+-            return level.getFluidState(pos).is(FluidTags.WATER) && !level.getBlockState(blockPos).isRedstoneConductor(level, blockPos);
++            // Papercut
++            BlockPos blockPos;
++            return level.getFluidState(pos).is(FluidTags.WATER) && !level.getBlockState(blockPos = pos.above()).isRedstoneConductor(level, blockPos);
++            // Papercut
+         } else {
+             return false;
+         }
+@@ -25,12 +27,11 @@ public interface SpawnPlacementTypes {
+         @Override
+         public boolean isSpawnPositionOk(LevelReader level, BlockPos pos, @Nullable EntityType<?> entityType) {
+             if (entityType != null && level.getWorldBorder().isWithinBounds(pos)) {
+-                BlockPos blockPos = pos.above();
+                 BlockPos blockPos1 = pos.below();
+                 BlockState blockState = level.getBlockState(blockPos1);
+                 return blockState.isValidSpawn(level, blockPos1, entityType)
+                     && this.isValidEmptySpawnBlock(level, pos, entityType)
+-                    && this.isValidEmptySpawnBlock(level, blockPos, entityType);
++                        && this.isValidEmptySpawnBlock(level, pos.above(), entityType); // Papercut
+             } else {
+                 return false;
+             }
+diff --git a/net/minecraft/world/entity/ai/behavior/BehaviorUtils.java b/net/minecraft/world/entity/ai/behavior/BehaviorUtils.java
+index f952fdc9892d9b0392f30841f2c8264fef9de77b..4743c4bfb1e5de125964ac59f8042838d4ccf3d5 100644
+--- a/net/minecraft/world/entity/ai/behavior/BehaviorUtils.java
++++ b/net/minecraft/world/entity/ai/behavior/BehaviorUtils.java
+@@ -152,7 +152,7 @@ public class BehaviorUtils {
+         Vec3 pos = DefaultRandomPos.getPos(pathfinder, radius, verticalDistance);
+         int i = 0;
+ 
+-        while (pos != null && !pathfinder.level().getBlockState(BlockPos.containing(pos)).isPathfindable(PathComputationType.WATER) && i++ < 10) {
++        while (pos != null && !pathfinder.level().papercut$getBlockState(pos.asBlockPosLong()).isPathfindable(PathComputationType.WATER) && i++ < 10) { // Papercut
+             pos = DefaultRandomPos.getPos(pathfinder, radius, verticalDistance);
+         }
+ 
+diff --git a/net/minecraft/world/entity/ai/behavior/GoToClosestVillage.java b/net/minecraft/world/entity/ai/behavior/GoToClosestVillage.java
+index f803e7c6928274fe6161d6f27beb6c66504e0c80..67425c2c37672fbb254915e345ee74eda738184d 100644
+--- a/net/minecraft/world/entity/ai/behavior/GoToClosestVillage.java
++++ b/net/minecraft/world/entity/ai/behavior/GoToClosestVillage.java
+@@ -24,7 +24,7 @@ public class GoToClosestVillage {
+                     for (int i1 = 0; i1 < 5; i1++) {
+                         Vec3 pos = LandRandomPos.getPos(villager, 15, 7, pos1 -> -poiManager.sectionsToVillage(SectionPos.of(pos1)));
+                         if (pos != null) {
+-                            int i2 = poiManager.sectionsToVillage(SectionPos.of(BlockPos.containing(pos)));
++                            int i2 = poiManager.sectionsToVillage(SectionPos.of(net.minecraft.util.Mth.floor(pos.x) >> 4, net.minecraft.util.Mth.floor(pos.y) >> 4, net.minecraft.util.Mth.floor(pos.z) >> 4)); // Papercut
+                             if (i2 < i) {
+                                 vec3 = pos;
+                                 break;
+diff --git a/net/minecraft/world/entity/ai/goal/CatLieOnBedGoal.java b/net/minecraft/world/entity/ai/goal/CatLieOnBedGoal.java
+index eb52accb00c119217c42df4645fac30b07279729..2dd719315b5ac70be19a87a68630931be7871e4e 100644
+--- a/net/minecraft/world/entity/ai/goal/CatLieOnBedGoal.java
++++ b/net/minecraft/world/entity/ai/goal/CatLieOnBedGoal.java
+@@ -52,6 +52,6 @@ public class CatLieOnBedGoal extends MoveToBlockGoal {
+ 
+     @Override
+     protected boolean isValidTarget(LevelReader level, BlockPos pos) {
+-        return level.isEmptyBlock(pos.above()) && level.getBlockState(pos).is(BlockTags.BEDS);
++        return level.papercut$isEmptyBlock(pos.getX(), pos.getY() + 1, pos.getZ()) && level.getBlockState(pos).is(BlockTags.BEDS); // Papercut
+     }
+ }
+diff --git a/net/minecraft/world/entity/ai/goal/CatSitOnBlockGoal.java b/net/minecraft/world/entity/ai/goal/CatSitOnBlockGoal.java
+index 2e75dfba01d42c8ff79989c17a33560af7ab2dad..bf95a7de9305b724ad485c977077fe60dcf44471 100644
+--- a/net/minecraft/world/entity/ai/goal/CatSitOnBlockGoal.java
++++ b/net/minecraft/world/entity/ai/goal/CatSitOnBlockGoal.java
+@@ -44,7 +44,7 @@ public class CatSitOnBlockGoal extends MoveToBlockGoal {
+ 
+     @Override
+     protected boolean isValidTarget(LevelReader level, BlockPos pos) {
+-        if (!level.isEmptyBlock(pos.above())) {
++        if (!level.papercut$isEmptyBlock(pos.getX(), pos.getY() + 1, pos.getZ())) { // Papercut
+             return false;
+         } else {
+             BlockState blockState = level.getBlockState(pos);
+diff --git a/net/minecraft/world/entity/ai/goal/ClimbOnTopOfPowderSnowGoal.java b/net/minecraft/world/entity/ai/goal/ClimbOnTopOfPowderSnowGoal.java
+index 15cb0085cab7490c3fceb0b3e5c3b90abad6bb8b..9eddd21500629c1c318c4fa3470b83d9e3f36ea2 100644
+--- a/net/minecraft/world/entity/ai/goal/ClimbOnTopOfPowderSnowGoal.java
++++ b/net/minecraft/world/entity/ai/goal/ClimbOnTopOfPowderSnowGoal.java
+@@ -23,9 +23,10 @@ public class ClimbOnTopOfPowderSnowGoal extends Goal {
+     public boolean canUse() {
+         boolean flag = this.mob.wasInPowderSnow || this.mob.isInPowderSnow;
+         if (flag && this.mob.getType().is(EntityTypeTags.POWDER_SNOW_WALKABLE_MOBS)) {
+-            BlockPos blockPos = this.mob.blockPosition().above();
+-            BlockState blockState = this.level.getBlockState(blockPos);
+-            return blockState.is(Blocks.POWDER_SNOW) || blockState.getCollisionShape(this.level, blockPos) == Shapes.empty();
++            // Papercut
++            BlockState blockState = this.level.papercut$getBlockState(this.mob.blockPosition().getX(), this.mob.blockPosition().getY() + 1, this.mob.blockPosition().getZ());
++            return blockState.is(Blocks.POWDER_SNOW) || blockState.getCollisionShape(this.level, this.mob.blockPosition().above()) == Shapes.empty();
++            // Papercut
+         } else {
+             return false;
+         }
+diff --git a/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java b/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java
+index 50cc4c462640a9d40abef6245439d71e8c593ae6..dd526d62959ee0cdebeb6c8ba6bacb231c1b9be0 100644
+--- a/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java
++++ b/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java
+@@ -151,7 +151,9 @@ public class RemoveBlockGoal extends MoveToBlockGoal {
+         ChunkAccess chunk = level.getChunkIfLoadedImmediately(pos.getX() >> 4, pos.getZ() >> 4); // Paper - Prevent AI rules from loading chunks
+         return chunk != null
+             && chunk.getBlockState(pos).is(this.blockToRemove)
+-            && chunk.getBlockState(pos.above()).isAir()
+-            && chunk.getBlockState(pos.above(2)).isAir();
++                // Papercut
++                && chunk.getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()).isAir()
++                && chunk.getBlockState(pos.getX(), pos.getY() + 2, pos.getZ()).isAir();
++                // Papercut
+     }
+ }
+diff --git a/net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java b/net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java
+index 59236a4f5fcb9212b7ef66ce87bd8efcdea5383e..45c760df1336cd27fd28a9dd50b0c352d0d6b4bf 100644
+--- a/net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java
+@@ -40,7 +40,7 @@ public class AmphibiousPathNavigation extends PathNavigation {
+ 
+     @Override
+     public boolean isStableDestination(BlockPos pos) {
+-        return !this.level.getBlockState(pos.below()).isAir();
++        return !this.level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()).isAir(); // Papercut
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+index 0a77b906a426732a2f82e8727ef99b0ebf692238..ce36cadf64a93ea2b1632265793af50e6e64969b 100644
+--- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+@@ -289,8 +289,7 @@ public abstract class PathNavigation {
+     }
+ 
+     protected double getGroundY(Vec3 pos) {
+-        BlockPos blockPos = BlockPos.containing(pos);
+-        return this.level.getBlockState(blockPos.below()).isAir() ? pos.y : WalkNodeEvaluator.getFloorLevel(this.level, blockPos);
++        return this.level.papercut$getBlockState(Mth.floor(pos.x), Mth.floor(pos.y) - 1, Mth.floor(pos.z)).isAir() ? pos.y : WalkNodeEvaluator.getFloorLevel(this.level, BlockPos.containing(pos)); // Papercut
+     }
+ 
+     protected void followThePath() {
+@@ -403,7 +402,7 @@ public abstract class PathNavigation {
+             for (int i = 0; i < this.path.getNodeCount(); i++) {
+                 Node node = this.path.getNode(i);
+                 Node node1 = i + 1 < this.path.getNodeCount() ? this.path.getNode(i + 1) : null;
+-                BlockState blockState = this.level.getBlockState(new BlockPos(node.x, node.y, node.z));
++                BlockState blockState = this.level.papercut$getBlockState(node.x, node.y, node.z); // Paercut
+                 if (blockState.is(BlockTags.CAULDRONS)) {
+                     this.path.replaceNode(i, node.cloneAndMove(node.x, node.y + 1, node.z));
+                     if (node1 != null && node.y >= node1.y) {
+@@ -431,8 +430,7 @@ public abstract class PathNavigation {
+     }
+ 
+     public boolean isStableDestination(BlockPos pos) {
+-        BlockPos blockPos = pos.below();
+-        return this.level.getBlockState(blockPos).isSolidRender();
++        return this.level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()).isSolidRender(); // Papercut
+     }
+ 
+     public NodeEvaluator getNodeEvaluator() {
+diff --git a/net/minecraft/world/entity/animal/AgeableWaterCreature.java b/net/minecraft/world/entity/animal/AgeableWaterCreature.java
+index b147020149dfc7ee03dc770a4e041fe5991220ee..feb283fe7012888cda0c9ecb61a02117bd633a32 100644
+--- a/net/minecraft/world/entity/animal/AgeableWaterCreature.java
++++ b/net/minecraft/world/entity/animal/AgeableWaterCreature.java
+@@ -74,7 +74,9 @@ public abstract class AgeableWaterCreature extends AgeableMob {
+         // Paper end - Make water animal spawn height configurable
+         return pos.getY() >= i
+             && pos.getY() <= seaLevel
+-            && level.getFluidState(pos.below()).is(FluidTags.WATER)
+-            && level.getBlockState(pos.above()).is(Blocks.WATER);
++                // Papercut
++                && level.papercut$getFluidState(pos.getX(), pos.getY() - 1, pos.getZ()).is(FluidTags.WATER)
++                && level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()).is(Blocks.WATER);
++                // Papercut
+     }
+ }
+diff --git a/net/minecraft/world/entity/animal/equine/AbstractHorse.java b/net/minecraft/world/entity/animal/equine/AbstractHorse.java
+index e837c63631c637238b9fe0ba05984af5e0d2b833..c6debcc9ed5a480f2b0ee819cde56ffc0f8bab7d 100644
+--- a/net/minecraft/world/entity/animal/equine/AbstractHorse.java
++++ b/net/minecraft/world/entity/animal/equine/AbstractHorse.java
+@@ -343,7 +343,7 @@ public abstract class AbstractHorse extends Animal implements HasCustomInventory
+     @Override
+     protected void playStepSound(BlockPos pos, BlockState block) {
+         if (!block.liquid()) {
+-            BlockState blockState = this.level().getBlockState(pos.above());
++            BlockState blockState = this.level().papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()); // Papercut
+             SoundType soundType = block.getSoundType();
+             if (blockState.is(Blocks.SNOW)) {
+                 soundType = blockState.getSoundType();
+diff --git a/net/minecraft/world/entity/animal/fish/TropicalFish.java b/net/minecraft/world/entity/animal/fish/TropicalFish.java
+index e3961892ffc05bef4947bda75445ca5e255dce11..7dc2460cd2cdf754bb49600b165b61cd1794ed6e 100644
+--- a/net/minecraft/world/entity/animal/fish/TropicalFish.java
++++ b/net/minecraft/world/entity/animal/fish/TropicalFish.java
+@@ -261,8 +261,10 @@ public class TropicalFish extends AbstractSchoolingFish {
+     public static boolean checkTropicalFishSpawnRules(
+         EntityType<TropicalFish> entityType, LevelAccessor level, EntitySpawnReason spawnReason, BlockPos pos, RandomSource random
+     ) {
+-        return level.getFluidState(pos.below()).is(FluidTags.WATER)
+-            && level.getBlockState(pos.above()).is(Blocks.WATER)
++        // Papercut
++        return level.papercut$getFluidState(pos.getX(), pos.getY() - 1, pos.getZ()).is(FluidTags.WATER)
++                && level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()).is(Blocks.WATER)
++                // Papercut
+             && (
+                 level.getBiome(pos).is(BiomeTags.ALLOWS_TROPICAL_FISH_SPAWNS_AT_ANY_HEIGHT)
+                     || WaterAnimal.checkSurfaceWaterAnimalSpawnRules(entityType, level, spawnReason, pos, random)
+diff --git a/net/minecraft/world/entity/animal/fish/WaterAnimal.java b/net/minecraft/world/entity/animal/fish/WaterAnimal.java
+index 3965cb8ae6fdd8d9d0135e6695463e6bef624fe2..7515abfe2c7f93e3b824f5d575ca4aaa5ae2671a 100644
+--- a/net/minecraft/world/entity/animal/fish/WaterAnimal.java
++++ b/net/minecraft/world/entity/animal/fish/WaterAnimal.java
+@@ -78,7 +78,9 @@ public abstract class WaterAnimal extends PathfinderMob {
+         // Paper end - Make water animal spawn height configurable
+         return pos.getY() >= i
+             && pos.getY() <= seaLevel
+-            && level.getFluidState(pos.below()).is(FluidTags.WATER)
+-            && level.getBlockState(pos.above()).is(Blocks.WATER);
++                // Papercut
++                && level.pluto$getFluidState(pos.getX(), pos.getY() - 1, pos.getZ()).is(FluidTags.WATER)
++                && level.pluto$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()).is(Blocks.WATER);
++                // Papercut
+     }
+ }
+diff --git a/net/minecraft/world/entity/animal/fox/Fox.java b/net/minecraft/world/entity/animal/fox/Fox.java
+index 6fb314b49b7a482d4092d5a63c06abab69845c85..f72f55fb87d91b721e9921190b7e02134847d84b 100644
+--- a/net/minecraft/world/entity/animal/fox/Fox.java
++++ b/net/minecraft/world/entity/animal/fox/Fox.java
+@@ -743,7 +743,7 @@ public class Fox extends Animal {
+             double d4 = d2 == 0.0 ? d1 * (i1 / 6.0F) : d3 / d2;
+ 
+             for (int i2 = 1; i2 < 4; i2++) {
+-                if (!fox.level().getBlockState(BlockPos.containing(fox.getX() + d4, fox.getY() + i2, fox.getZ() + d3)).canBeReplaced()) {
++                if (!fox.level().papercut$getBlockState(Mth.floor(fox.getX() + d4), Mth.floor(fox.getY() + i2), Mth.floor(fox.getZ() + d3)).canBeReplaced()) { // Papercut
+                     return false;
+                 }
+             }
+diff --git a/net/minecraft/world/entity/animal/rabbit/Rabbit.java b/net/minecraft/world/entity/animal/rabbit/Rabbit.java
+index 17e58836d18afc7cfcc1cf7a8ac5b9e66ceb5f0d..c11835c702c0c733efae1e6a46365cbbc79113d3 100644
+--- a/net/minecraft/world/entity/animal/rabbit/Rabbit.java
++++ b/net/minecraft/world/entity/animal/rabbit/Rabbit.java
+@@ -611,7 +611,7 @@ public class Rabbit extends Animal {
+         protected boolean isValidTarget(LevelReader level, BlockPos pos) {
+             BlockState blockState = level.getBlockState(pos);
+             if (blockState.is(Blocks.FARMLAND) && this.wantsToRaid && !this.canRaid) {
+-                blockState = level.getBlockState(pos.above());
++                blockState = level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()); // Papercut
+                 if (blockState.getBlock() instanceof CarrotBlock && ((CarrotBlock)blockState.getBlock()).isMaxAge(blockState)) {
+                     this.canRaid = true;
+                     return true;
+diff --git a/net/minecraft/world/entity/animal/turtle/Turtle.java b/net/minecraft/world/entity/animal/turtle/Turtle.java
+index fdbc70322eb653d2cc576090c27d1cb67bfce1f6..4c74c572cde1ea9c27ff67166e73d151e881d873 100644
+--- a/net/minecraft/world/entity/animal/turtle/Turtle.java
++++ b/net/minecraft/world/entity/animal/turtle/Turtle.java
+@@ -383,7 +383,7 @@ public class Turtle extends Animal {
+                     posTowards = DefaultRandomPos.getPosTowards(this.turtle, 8, 7, vec3, (float) (Math.PI / 2));
+                 }
+ 
+-                if (posTowards != null && !flag && !this.turtle.level().getBlockState(BlockPos.containing(posTowards)).is(Blocks.WATER)) {
++                if (posTowards != null && !flag && !this.turtle.level().papercut$getBlockState(posTowards.asBlockPosLong()).is(Blocks.WATER)) { // Papercut
+                     posTowards = DefaultRandomPos.getPosTowards(this.turtle, 16, 5, vec3, (float) (Math.PI / 2));
+                 }
+ 
+@@ -481,7 +481,7 @@ public class Turtle extends Animal {
+ 
+         @Override
+         protected boolean isValidTarget(LevelReader level, BlockPos pos) {
+-            return level.isEmptyBlock(pos.above()) && TurtleEggBlock.isSand(level, pos);
++            return level.papercut$isEmptyBlock(pos.getX(), pos.getY() + 1, pos.getZ()) && TurtleEggBlock.isSand(level, pos); // Papercut
+         }
+     }
+ 
+diff --git a/net/minecraft/world/entity/item/ItemEntity.java b/net/minecraft/world/entity/item/ItemEntity.java
+index 7d8748fd4bdd523a7cf37ef86729da4277416f9a..0747627ee633e9fd301e781108b7514f37545a7f 100644
+--- a/net/minecraft/world/entity/item/ItemEntity.java
++++ b/net/minecraft/world/entity/item/ItemEntity.java
+@@ -180,7 +180,7 @@ public class ItemEntity extends Entity implements TraceableEntity {
+                     f = 1F;
+                 } else if (this.onGround()) {
+                     // Paper end - Friction API
+-                    f = this.level().getBlockState(this.getBlockPosBelowThatAffectsMyMovement()).getBlock().getFriction() * 0.98F;
++                    f = this.level().papercut$getBlockState(this.papercut$getBlockPosBelowThatAffectsMyMovement()).getBlock().getFriction() * 0.98F; // Papercut
+                 }
+ 
+                 this.setDeltaMovement(this.getDeltaMovement().multiply(f, 0.98, f));
+@@ -228,6 +228,12 @@ public class ItemEntity extends Entity implements TraceableEntity {
+     public BlockPos getBlockPosBelowThatAffectsMyMovement() {
+         return this.getOnPos(0.999999F);
+     }
++    // Papercut
++    @Override
++    public long papercut$getBlockPosBelowThatAffectsMyMovement() {
++        return this.papercut$getOnPos((float) DELTA_AFFECTED_BY_BLOCKS_BELOW_1_0);
++    }
++    // Papercut
+ 
+     private void setUnderwaterMovement() {
+         this.setFluidMovement(0.99F);
+diff --git a/net/minecraft/world/entity/monster/Silverfish.java b/net/minecraft/world/entity/monster/Silverfish.java
+index 142f776ea2bfcd434d045a78d5629cd05b006b20..899b276b70dc201db53da2d181751b4a0cacec10 100644
+--- a/net/minecraft/world/entity/monster/Silverfish.java
++++ b/net/minecraft/world/entity/monster/Silverfish.java
+@@ -141,8 +141,7 @@ public class Silverfish extends Monster {
+                 RandomSource random = this.mob.getRandom();
+                 if (getServerLevel(this.mob).getGameRules().get(GameRules.MOB_GRIEFING) && random.nextInt(reducedTickDelay(10)) == 0) {
+                     this.selectedDirection = Direction.getRandom(random);
+-                    BlockPos blockPos = BlockPos.containing(this.mob.getX(), this.mob.getY() + 0.5, this.mob.getZ()).relative(this.selectedDirection);
+-                    BlockState blockState = this.mob.level().getBlockState(blockPos);
++                    BlockState blockState = this.mob.level().papercut$getBlockState(net.minecraft.util.Mth.floor(this.mob.getX()) + this.selectedDirection.getStepX(), net.minecraft.util.Mth.floor(this.mob.getY() + 0.5) + this.selectedDirection.getStepY(), net.minecraft.util.Mth.floor(this.mob.getZ()) + this.selectedDirection.getStepZ()); // Papercut
+                     if (InfestedBlock.isCompatibleHostBlock(blockState)) {
+                         this.doMerge = true;
+                         return true;
+diff --git a/net/minecraft/world/entity/monster/Strider.java b/net/minecraft/world/entity/monster/Strider.java
+index b451566378401e471a98db63df502b7c4cd20f42..d4b5d82160e23b2f86c261ae79eed2c5283ea693 100644
+--- a/net/minecraft/world/entity/monster/Strider.java
++++ b/net/minecraft/world/entity/monster/Strider.java
+@@ -321,7 +321,7 @@ public class Strider extends Animal implements ItemSteerable {
+         if (this.isInLava()) {
+             CollisionContext collisionContext = CollisionContext.of(this);
+             if (collisionContext.isAbove(LiquidBlock.SHAPE_STABLE, this.blockPosition(), true)
+-                && !this.level().getFluidState(this.blockPosition().above()).is(FluidTags.LAVA)) {
++                    && !this.level().papercut$getFluidState(this.blockPosition().getX(), this.blockPosition().getY() + 1, this.blockPosition().getZ()).is(FluidTags.LAVA)) { // Papercut
+                 this.setOnGround(true);
+             } else {
+                 this.setDeltaMovement(this.getDeltaMovement().scale(0.5).add(0.0, 0.05, 0.0));
+diff --git a/net/minecraft/world/entity/monster/skeleton/Stray.java b/net/minecraft/world/entity/monster/skeleton/Stray.java
+index 24ae7263b2661899e7824ab5877f9b1c9f04d80f..7e81ba528a6f6a5a24383381e40f5a869d2953a8 100644
+--- a/net/minecraft/world/entity/monster/skeleton/Stray.java
++++ b/net/minecraft/world/entity/monster/skeleton/Stray.java
+@@ -26,14 +26,19 @@ public class Stray extends AbstractSkeleton {
+     public static boolean checkStraySpawnRules(
+         EntityType<Stray> entityType, ServerLevelAccessor level, EntitySpawnReason spawnReason, BlockPos pos, RandomSource random
+     ) {
+-        BlockPos blockPos = pos;
++        // Papercut
++        final int x = pos.getX();
++        int y = pos.getY();
++        final int z = pos.getZ();
++        net.minecraft.world.level.chunk.ChunkAccess chunk = level.getChunk(pos);
+ 
+         do {
+-            blockPos = blockPos.above();
+-        } while (level.getBlockState(blockPos).is(Blocks.POWDER_SNOW));
++            y++;
++        } while (level.getBlockState(new BlockPos(x, y, z)).is(Blocks.POWDER_SNOW));
+ 
+         return Monster.checkMonsterSpawnRules(entityType, level, spawnReason, pos, random)
+-            && (EntitySpawnReason.isSpawner(spawnReason) || level.canSeeSky(blockPos.below()));
++                && (EntitySpawnReason.isSpawner(spawnReason) || level.canSeeSky(new BlockPos(x, y - 1, z)));
++        // Papercut
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/entity/projectile/FishingHook.java b/net/minecraft/world/entity/projectile/FishingHook.java
+index 71f6acc07d222fe512bf8d9fbaad35cb36bcf2d6..134a26940e8dfb21be241d32b6e00b1d114b0ee7 100644
+--- a/net/minecraft/world/entity/projectile/FishingHook.java
++++ b/net/minecraft/world/entity/projectile/FishingHook.java
+@@ -351,7 +351,7 @@ public class FishingHook extends Projectile {
+                 double d = this.getX() + sin * this.timeUntilHooked * 0.1F;
+                 double d1 = Mth.floor(this.getY()) + 1.0F;
+                 double d2 = this.getZ() + cos * this.timeUntilHooked * 0.1F;
+-                BlockState blockState = serverLevel.getBlockState(BlockPos.containing(d, d1 - 1.0, d2));
++                BlockState blockState = serverLevel.papercut$getBlockState(d, d1 - 1.0, d2); // Papercut
+                 if (blockState.is(Blocks.WATER)) {
+                     if (this.random.nextFloat() < 0.15F) {
+                         serverLevel.sendParticles(ParticleTypes.BUBBLE, d, d1 - 0.1F, d2, 1, sin, 0.1, cos, 0.0);
+@@ -413,7 +413,7 @@ public class FishingHook extends Projectile {
+                 double d = this.getX() + Mth.sin(sin) * cos * 0.1;
+                 double d1 = Mth.floor(this.getY()) + 1.0F;
+                 double d2 = this.getZ() + Mth.cos(sin) * cos * 0.1;
+-                BlockState blockState = serverLevel.getBlockState(BlockPos.containing(d, d1 - 1.0, d2));
++                BlockState blockState = serverLevel.papercut$getBlockState(d, d1 - 1.0, d2); // Papercut
+                 if (blockState.is(Blocks.WATER)) {
+                     serverLevel.sendParticles(ParticleTypes.SPLASH, d, d1, d2, 2 + this.random.nextInt(2), 0.1F, 0.0, 0.1F, 0.0);
+                 }
+diff --git a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
+index 7d8c528a76e6a95d27368bc459d654c6ef66dd8f..82bfb1b3cf64416608fddefef307758ba09b40c3 100644
+--- a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
++++ b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
+@@ -266,11 +266,13 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+             }
+ 
+             if (this.isAlive()) {
+-                BlockPos blockPos = BlockPos.containing(this.position());
++                long blockPos = this.position().asBlockPosLong(); // Papercut
+                 if ((
+                         --this.ticketTimer <= 0L
+-                            || var7 != SectionPos.blockToSectionCoord(blockPos.getX())
+-                            || sectionPosZ != SectionPos.blockToSectionCoord(blockPos.getZ())
++                                // Papercut
++                                || var7 != SectionPos.blockToSectionCoord(BlockPos.getX(blockPos))
++                                || sectionPosZ != SectionPos.blockToSectionCoord(BlockPos.getZ(blockPos))
++                                // Papercut
+                     )
+                     && entity instanceof ServerPlayer serverPlayer1) {
+                     this.ticketTimer = serverPlayer1.registerAndUpdateEnderPearlTicket(this);
+diff --git a/net/minecraft/world/entity/vehicle/minecart/AbstractMinecart.java b/net/minecraft/world/entity/vehicle/minecart/AbstractMinecart.java
+index 1123ec0038552e0b40774f4a433ff325695ea071..cd4d28cd92fd7156ef39fefb5b05d012517b42a0 100644
+--- a/net/minecraft/world/entity/vehicle/minecart/AbstractMinecart.java
++++ b/net/minecraft/world/entity/vehicle/minecart/AbstractMinecart.java
+@@ -330,10 +330,10 @@ public abstract class AbstractMinecart extends VehicleEntity {
+         int floor2 = Mth.floor(this.getZ());
+         if (useExperimentalMovement(this.level())) {
+             double d = this.getY() - 0.1 - 1.0E-5F;
+-            if (this.level().getBlockState(BlockPos.containing(floor, d, floor2)).is(BlockTags.RAILS)) {
++            if (this.level().papercut$getBlockState(floor, d, floor2).is(BlockTags.RAILS)) { // Papercut
+                 floor1 = Mth.floor(d);
+             }
+-        } else if (this.level().getBlockState(new BlockPos(floor, floor1 - 1, floor2)).is(BlockTags.RAILS)) {
++        } else if (this.level().papercut$getBlockState(floor, floor1 - 1, floor2).is(BlockTags.RAILS)) { // Papercut
+             floor1--;
+         }
+ 
+diff --git a/net/minecraft/world/entity/vehicle/minecart/NewMinecartBehavior.java b/net/minecraft/world/entity/vehicle/minecart/NewMinecartBehavior.java
+index 7cc494d53c9a6d2fa0d34a60da50a9d199d65340..fd16ce3a10ee742472389acbd181a65d9f2d3de1 100644
+--- a/net/minecraft/world/entity/vehicle/minecart/NewMinecartBehavior.java
++++ b/net/minecraft/world/entity/vehicle/minecart/NewMinecartBehavior.java
+@@ -438,7 +438,7 @@ public class NewMinecartBehavior extends MinecartBehavior {
+                 }
+ 
+                 this.minecart.move(MoverType.SELF, vec36.subtract(vec3));
+-                BlockState blockState = this.level().getBlockState(BlockPos.containing(vec36));
++                BlockState blockState = this.level().papercut$getBlockState(vec36.x, vec36.y, vec36.z); // Papercut
+                 if (flag) {
+                     if (BaseRailBlock.isRail(blockState)) {
+                         RailShape railShape1 = blockState.getValue(((BaseRailBlock)blockState.getBlock()).getShapeProperty());
+diff --git a/net/minecraft/world/level/BlockGetter.java b/net/minecraft/world/level/BlockGetter.java
+index 8a21910fe7ed61c903c4f36fced63b179ace4577..5302e2be0e90f6c886c34bf4c379d15f8431cde6 100644
+--- a/net/minecraft/world/level/BlockGetter.java
++++ b/net/minecraft/world/level/BlockGetter.java
+@@ -28,6 +28,31 @@ public interface BlockGetter extends LevelHeightAccessor {
+         BlockEntity blockEntity = this.getBlockEntity(pos);
+         return blockEntity != null && blockEntity.getType() == type ? Optional.of((T)blockEntity) : Optional.empty();
+     }
++    // Papercut
++    default BlockState papercut$getBlockState(double x, double y, double z) {
++        return papercut$getBlockState(Mth.floor(x), Mth.floor(y), Mth.floor(z));
++    }
++    BlockState papercut$getBlockState(int x, int y, int z);
++    BlockState papercut$getBlockState(long packedPos);
++
++    default @Nullable BlockState papercut$getBlockStateIfLoaded(double x, double y, double z) {
++    return papercut$getBlockStateIfLoaded(Mth.floor(x), Mth.floor(y), Mth.floor(z));
++}
++    @Nullable BlockState papercut$getBlockStateIfLoaded(int x, int y, int z);
++    @Nullable BlockState papercut$getBlockStateIfLoaded(long packedPos);
++
++    default FluidState papercut$getFluidState(double x, double y, double z) {
++    return papercut$getFluidState(Mth.floor(x), Mth.floor(y), Mth.floor(z));
++}
++    FluidState papercut$getFluidState(int x, int y, int z);
++    FluidState papercut$getFluidState(long packedPos);
++
++    default @Nullable FluidState papercut$getFluidStateIfLoaded(double x, double y, double z) {
++    return papercut$getFluidStateIfLoaded(Mth.floor(x), Mth.floor(y), Mth.floor(z));
++}
++    @Nullable FluidState papercut$getFluidStateIfLoaded(int x, int y, int z);
++    @Nullable FluidState papercut$getFluidStateIfLoaded(long packedPos);
++    // Papercut
+ 
+     BlockState getBlockState(BlockPos pos);
+ 
+diff --git a/net/minecraft/world/level/EmptyBlockAndTintGetter.java b/net/minecraft/world/level/EmptyBlockAndTintGetter.java
+index d27024f9ac20c61bbb23ef713eafc8fdd4b7ddcf..37e1d78c906800c48b2f4281ac0277d5f7307ab2 100644
+--- a/net/minecraft/world/level/EmptyBlockAndTintGetter.java
++++ b/net/minecraft/world/level/EmptyBlockAndTintGetter.java
+@@ -33,6 +33,41 @@ public enum EmptyBlockAndTintGetter implements BlockAndTintGetter {
+         return null;
+     }
+ 
++    // Papercut
++    @Override
++    public BlockState papercut$getBlockState(int x, int y, int z) {
++        return Blocks.AIR.defaultBlockState();
++    }
++    @Override
++    public BlockState papercut$getBlockState(long packedPos) {
++        return Blocks.AIR.defaultBlockState();
++    }
++    @Override
++    public @Nullable BlockState papercut$getBlockStateIfLoaded(int x, int y, int z) {
++        return null;
++    }
++    @Override
++    public @Nullable BlockState papercut$getBlockStateIfLoaded(long packedPos) {
++        return null;
++    }
++    @Override
++    public FluidState papercut$getFluidState(int x, int y, int z) {
++        return Fluids.EMPTY.defaultFluidState();
++    }
++    @Override
++    public FluidState papercut$getFluidState(long packedPos) {
++        return Fluids.EMPTY.defaultFluidState();
++    }
++    @Override
++    public @Nullable FluidState papercut$getFluidStateIfLoaded(int x, int y, int z) {
++        return null;
++    }
++    @Override
++    public @Nullable FluidState papercut$getFluidStateIfLoaded(long packedPos) {
++                return null;
++            }
++    // Papercut
++
+     @Override
+     public BlockState getBlockState(BlockPos pos) {
+         return Blocks.AIR.defaultBlockState();
+diff --git a/net/minecraft/world/level/EmptyBlockGetter.java b/net/minecraft/world/level/EmptyBlockGetter.java
+index 05575a4212addc510331d41b7af8e9f134394ce2..9048184805c230f4f357cce425f6f68feb4656f7 100644
+--- a/net/minecraft/world/level/EmptyBlockGetter.java
++++ b/net/minecraft/world/level/EmptyBlockGetter.java
+@@ -16,6 +16,41 @@ public enum EmptyBlockGetter implements BlockGetter {
+         return null;
+     }
+ 
++    // Papercut
++    @Override
++    public BlockState papercut$getBlockState(int x, int y, int z) {
++        return Blocks.AIR.defaultBlockState();
++    }
++    @Override
++    public BlockState papercut$getBlockState(long packedPos) {
++        return Blocks.AIR.defaultBlockState();
++    }
++
++    @Override
++    public BlockState papercut$getBlockStateIfLoaded(int x, int y, int z) {
++        return Blocks.AIR.defaultBlockState();
++    }
++    @Override
++    public BlockState papercut$getBlockStateIfLoaded(long packedPos) {
++        return Blocks.AIR.defaultBlockState();
++    }
++    @Override public FluidState papercut$getFluidState(int x, int y, int z) {
++        return Fluids.EMPTY.defaultFluidState();
++    }
++    @Override
++    public FluidState papercut$getFluidState(long packedPos) {
++        return Fluids.EMPTY.defaultFluidState();
++    }
++    @Override
++    public FluidState papercut$getFluidStateIfLoaded(int x, int y, int z) {
++        return Fluids.EMPTY.defaultFluidState();
++    }
++    @Override
++    public FluidState papercut$getFluidStateIfLoaded(long packedPos) {
++        return Fluids.EMPTY.defaultFluidState();
++    }
++    // Papercut
++
+     // Paper start - If loaded util
+     @Override
+     public final FluidState getFluidIfLoaded(BlockPos pos) {
+diff --git a/net/minecraft/world/level/Level.java b/net/minecraft/world/level/Level.java
+index 2c3d36a9d4bf361c516fe1fe6e29d225002b303c..bfe56ce2d30d5db0528532ea592a374506750360 100644
+--- a/net/minecraft/world/level/Level.java
++++ b/net/minecraft/world/level/Level.java
+@@ -599,7 +599,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+ 
+         final BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
+         final ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.LazyEntityCollisionContext collisionShape = new ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.LazyEntityCollisionContext(entity);
+-        BlockPos selected = null;
++        Long selected = null; // Papercut
+         double selectedDistance = Double.MAX_VALUE;
+         final Vec3 entityPos = entity.position();
+ 
+@@ -673,7 +673,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+                                 }
+ 
+                                 final double distance = mutablePos.distToCenterSqr(entityPos);
+-                                if (distance > selectedDistance || (distance == selectedDistance && selected.compareTo(mutablePos) >= 0)) {
++                                if (distance > selectedDistance || (distance == selectedDistance && selected.compareTo(mutablePos.asLong()) >= 0)) { // Papercut
+                                     continue;
+                                 }
+ 
+@@ -695,24 +695,37 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+                                     }
+ 
+                                     // avoid VoxelShape#move by shifting the entity collision shape instead
+-                                    final AABB shiftedAABB = aabb.move(-(double)blockX, -(double)blockY, -(double)blockZ);
++                                    // Papercut
++                                    final double x1 = aabb.minX + (-(double)blockX);
++                                    final double x2 = aabb.maxX + (-(double)blockX);
++                                    final double y1 = aabb.minY + (-(double)blockY);
++                                    final double y2 = aabb.maxY + (-(double)blockY);
++                                    final double z1 = aabb.minZ + (-(double)blockZ);
++                                    final double z2 = aabb.maxZ + (-(double)blockZ);
++                                    final double minX = Math.min(x1, x2);
++                                    final double minY = Math.min(y1, y2);
++                                    final double minZ = Math.min(z1, z2);
++                                    final double maxX = Math.max(x1, x2);
++                                    final double maxY = Math.max(y1, y2);
++                                    final double maxZ = Math.max(z1, z2);
++                                    // Papercut
+ 
+                                     final AABB singleAABB = ((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)blockCollision).moonrise$getSingleAABBRepresentation();
+                                     if (singleAABB != null) {
+-                                        if (!ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.voxelShapeIntersect(singleAABB, shiftedAABB)) {
++                                        if (!ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.voxelShapeIntersect(singleAABB, minX, minY, minZ, maxX, maxY, maxZ)) { // Papercut
+                                             continue;
+                                         }
+ 
+-                                        selected = mutablePos.immutable();
++                                        selected = mutablePos.asLong(); // Papercut
+                                         selectedDistance = distance;
+                                         continue;
+                                     }
+ 
+-                                    if (!ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.voxelShapeIntersectNoEmpty(blockCollision, shiftedAABB)) {
++                                    if (!ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.papercut$voxelShapeIntersectNoEmpty(blockCollision, minX, minY, minZ, maxX, maxY, maxZ)) { // Papercut
+                                         continue;
+                                     }
+ 
+-                                    selected = mutablePos.immutable();
++                                    selected = mutablePos.asLong(); // Papercut
+                                     selectedDistance = distance;
+                                     continue;
+                                 }
+@@ -723,7 +736,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+             }
+         }
+ 
+-        return java.util.Optional.ofNullable(selected);
++        return java.util.Optional.ofNullable(selected == null ? null : BlockPos.of(selected)); // Papercut
+     }
+     // Paper end - optimise collisions
+     // Paper start - getblock optimisations - cache world height/sections
+@@ -1001,6 +1014,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+     @Nullable
+     public final BlockState getBlockStateIfLoaded(BlockPos pos) {
+         // CraftBukkit start - tree generation
++        long posLong = pos.asLong(); // Papercut
+         if (this.getCurrentWorldData().captureTreeGeneration) { // Folia - region threading
+             CraftBlockState previous = this.getCurrentWorldData().capturedBlockStates.get(pos); // Folia - region threading
+             if (previous != null) {
+@@ -1308,6 +1322,68 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+     public LevelLightEngine getLightEngine() {
+         return this.getChunkSource().getLightEngine();
+     }
++    // Papercut
++    public boolean isInValidBounds(int x, int y, int z) {
++        return !this.isOutsideBuildHeight(y) && isInValidBoundsHorizontal(x, z);
++    }
++    private static boolean isInValidBoundsHorizontal(int x, int z) {
++        return ChunkPos.isValid(x >> 4, z >> 4);
++    }
++    @Override
++    public BlockState papercut$getBlockState(int x, int y, int z) {
++        if (this.getCurrentWorldData().captureTreeGeneration) {
++            CraftBlockState previous = this.getCurrentWorldData().capturedBlockStates.get(BlockPos.asLong(x, y, z));
++            if (previous != null) {
++                return previous.getHandle();
++            }
++        }
++        if (!this.isInValidBounds(x, y, z))
++            return Blocks.VOID_AIR.defaultBlockState();
++        return this.getChunk(x >> 4, z >> 4, ChunkStatus.FULL, true).getBlockState(x, y, z);
++    }
++    @Override
++    public BlockState papercut$getBlockState(long packedPos) {
++        return papercut$getBlockState(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public @Nullable BlockState papercut$getBlockStateIfLoaded(int x, int y, int z) {
++        if (this.getCurrentWorldData().captureTreeGeneration) {
++            CraftBlockState previous = this.getCurrentWorldData().capturedBlockStates.get(BlockPos.asLong(x, y, z));
++            if (previous != null) {
++                return previous.getHandle();
++            }
++        }
++        if (!this.isInValidBounds(x, y, z))
++            return Blocks.VOID_AIR.defaultBlockState();
++        ChunkAccess chunk = this.getChunkIfLoadedImmediately(x >> 4, z >> 4);
++        return chunk == null ? null : chunk.getBlockState(x, y, z);
++    }
++    @Override
++    public @Nullable BlockState papercut$getBlockStateIfLoaded(long packedPos) {
++        return papercut$getBlockStateIfLoaded(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public FluidState papercut$getFluidState(int x, int y, int z) {
++        if (!this.isInValidBounds(x, y, z))
++            return Fluids.EMPTY.defaultFluidState();
++        return this.getChunk(x >> 4, z >> 4).papercut$getFluidState(x, y, z);
++    }
++    @Override
++    public FluidState papercut$getFluidState(long packedPos) {
++        return papercut$getFluidState(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public @Nullable FluidState papercut$getFluidStateIfLoaded(int x, int y, int z) {
++        if (!this.isInValidBounds(x, y, z))
++            return Fluids.EMPTY.defaultFluidState();
++        ChunkAccess chunk = this.getChunkIfLoadedImmediately(x >> 4, z >> 4);
++        return chunk == null ? null : chunk.papercut$getFluidState(x, y, z);
++    }
++    @Override
++    public @Nullable FluidState papercut$getFluidStateIfLoaded(long packedPos) {
++        return papercut$getFluidStateIfLoaded(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    // Papercut
+ 
+     // Folia start - region threading
+     @Nullable
+@@ -2030,10 +2106,10 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+                 if (blockState.is(Blocks.COMPARATOR)) {
+                     this.neighborChanged(blockState, blockPos, block, null, false);
+                 } else if (blockState.isRedstoneConductor(this, blockPos)) {
+-                    blockPos = blockPos.relative(direction);
+-                    blockState = this.getBlockState(blockPos);
++                    // Papercut
++                    blockState = this.papercut$getBlockState(blockPos.getX() + direction.getStepX(), blockPos.getY() + direction.getStepY(), blockPos.getZ() + direction.getStepZ()); // Papercut
+                     if (blockState.is(Blocks.COMPARATOR)) {
+-                        this.neighborChanged(blockState, blockPos, block, null, false);
++                        this.neighborChanged(blockState, blockPos.relative(direction), block, null, false); // Papercut
+                     }
+                 }
+             }
+diff --git a/net/minecraft/world/level/LevelReader.java b/net/minecraft/world/level/LevelReader.java
+index 91f8027e2421fb4cdd75d1dbc1305cff7bc00d84..afb5f584dd56703b25222e94d55aaaf14aa87004 100644
+--- a/net/minecraft/world/level/LevelReader.java
++++ b/net/minecraft/world/level/LevelReader.java
+@@ -97,6 +97,14 @@ public interface LevelReader extends ca.spottedleaf.moonrise.patches.chunk_syste
+     default BlockPos getHeightmapPos(Heightmap.Types heightmapType, BlockPos pos) {
+         return new BlockPos(pos.getX(), this.getHeight(heightmapType, pos.getX(), pos.getZ()), pos.getZ());
+     }
++    // Papercut
++    default boolean papercut$isEmptyBlock(int x, int y, int z) {
++        return this.papercut$getBlockState(x, y, z).isAir();
++    }
++    default boolean papercut$isEmptyBlock(long packedPos) {
++        return this.papercut$getBlockState(packedPos).isAir();
++    }
++    // Papercut
+ 
+     default boolean isEmptyBlock(BlockPos pos) {
+         return this.getBlockState(pos).isAir();
+@@ -110,8 +118,13 @@ public interface LevelReader extends ca.spottedleaf.moonrise.patches.chunk_syste
+             if (!this.canSeeSky(blockPos)) {
+                 return false;
+             } else {
+-                for (BlockPos var4 = blockPos.below(); var4.getY() > pos.getY(); var4 = var4.below()) {
+-                    BlockState blockState = this.getBlockState(var4);
++                // Papercut
++                final int originY = pos.getY();
++                final int x = blockPos.getX();
++                final int z = blockPos.getZ();
++                for (int var4 = blockPos.getY(); var4 > originY; var4--) {
++                    BlockState blockState = this.papercut$getBlockState(x, var4, z);
++                    // Papercut
+                     if (blockState.getLightBlock() > 0 && !blockState.liquid()) {
+                         return false;
+                     }
+@@ -161,12 +174,11 @@ public interface LevelReader extends ca.spottedleaf.moonrise.patches.chunk_syste
+         int ceil1 = Mth.ceil(aabb.maxY);
+         int floor2 = Mth.floor(aabb.minZ);
+         int ceil2 = Mth.ceil(aabb.maxZ);
+-        BlockPos.MutableBlockPos mutableBlockPos = new BlockPos.MutableBlockPos();
+ 
+         for (int i = floor; i < ceil; i++) {
+             for (int i1 = floor1; i1 < ceil1; i1++) {
+                 for (int i2 = floor2; i2 < ceil2; i2++) {
+-                    BlockState blockState = this.getBlockState(mutableBlockPos.set(i, i1, i2));
++                    BlockState blockState = this.papercut$getBlockState(i, i1, i2);
+                     if (!blockState.getFluidState().isEmpty()) {
+                         return true;
+                     }
+diff --git a/net/minecraft/world/level/PathNavigationRegion.java b/net/minecraft/world/level/PathNavigationRegion.java
+index 916444806363885aca8f88fd6ac87aebf94741e6..d798e8c2b029cd8544ea368cdf4ea867b367d7a7 100644
+--- a/net/minecraft/world/level/PathNavigationRegion.java
++++ b/net/minecraft/world/level/PathNavigationRegion.java
+@@ -122,6 +122,47 @@ public class PathNavigationRegion implements CollisionGetter {
+         ChunkAccess chunk = this.getChunk(pos);
+         return chunk.getBlockEntity(pos);
+     }
++    // Papercut
++    @Override
++    public BlockState papercut$getBlockState(int x, int y, int z) {
++        if (this.isOutsideBuildHeight(y))
++            return Blocks.AIR.defaultBlockState();
++        return this.getChunk(x >> 4, z >> 4).getBlockState(x, y, z);
++    }
++    @Override
++    public BlockState papercut$getBlockState(long packedPos) {
++        return papercut$getBlockState(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public @Nullable BlockState papercut$getBlockStateIfLoaded(int x, int y, int z) {
++        ChunkAccess chunk = getChunkIfLoaded(x >> 4, z >> 4);
++        return chunk == null ? null : chunk.getBlockState(x, y, z);
++    }
++    @Override
++    public @Nullable BlockState papercut$getBlockStateIfLoaded(long packedPos) {
++        return papercut$getBlockStateIfLoaded(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public FluidState papercut$getFluidState(int x, int y, int z) {
++        if (this.isOutsideBuildHeight(y))
++            return Fluids.EMPTY.defaultFluidState();
++        return this.getChunk(x >> 4, z >> 4).papercut$getFluidState(x, y, z);
++    }
++    @Override
++    public FluidState papercut$getFluidState(long packedPos) {
++        return papercut$getFluidState(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++
++    @Override
++    public @Nullable FluidState papercut$getFluidStateIfLoaded(int x, int y, int z) {
++        ChunkAccess chunk = getChunkIfLoaded(x >> 4, z >> 4);
++        return chunk == null ? null : chunk.papercut$getFluidState(x, y, z);
++    }
++    @Override
++    public @Nullable FluidState papercut$getFluidStateIfLoaded(long packedPos) {
++        return papercut$getFluidStateIfLoaded(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    // Papercut
+ 
+     @Override
+     public BlockState getBlockState(BlockPos pos) {
+diff --git a/net/minecraft/world/level/SignalGetter.java b/net/minecraft/world/level/SignalGetter.java
+index e036487b1c2fda067420f844c61452176dd44c44..74bca78198a761dafd3f74802ce6e157c2aa8394 100644
+--- a/net/minecraft/world/level/SignalGetter.java
++++ b/net/minecraft/world/level/SignalGetter.java
+@@ -9,34 +9,56 @@ import net.minecraft.world.level.block.state.BlockState;
+ 
+ public interface SignalGetter extends BlockGetter {
+     Direction[] DIRECTIONS = Direction.values();
++    // Papercut
++    default int papercut$getDirectSignal(int x, int y, int z, Direction direction) {
++        return this.papercut$getBlockState(x, y, z).papercut$getDirectSignal(this, x, y, z, direction);
++    }
++    default int papercut$getControlInputSignal(int x, int y, int z, Direction direction, boolean diodesOnly) {
++        BlockState blockState = this.papercut$getBlockState(x, y, z);
++        if (diodesOnly) {
++            return DiodeBlock.isDiode(blockState) ? this.papercut$getDirectSignal(x, y, z, direction) : 0;
++        } else if (blockState.is(Blocks.REDSTONE_BLOCK)) {
++            return 15;
++        } else if (blockState.is(Blocks.REDSTONE_WIRE)) {
++            return blockState.getValue(RedStoneWireBlock.POWER);
++        } else {
++            return blockState.isSignalSource() ? this.papercut$getDirectSignal(x, y, z, direction) : 0;
++        }
++    }
++    // Papercut
+ 
+     default int getDirectSignal(BlockPos pos, Direction direction) {
+         return this.getBlockState(pos).getDirectSignal(this, pos, direction);
+     }
+ 
+     default int getDirectSignalTo(BlockPos pos) {
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        // Papercut
+         int i = 0;
+-        i = Math.max(i, this.getDirectSignal(pos.below(), Direction.DOWN));
++        i = Math.max(i, this.papercut$getDirectSignal(x, y - 1, z, Direction.DOWN)); // Papercut
+         if (i >= 15) {
+             return i;
+         } else {
+-            i = Math.max(i, this.getDirectSignal(pos.above(), Direction.UP));
++            i = Math.max(i, this.papercut$getDirectSignal(x, y + 1, z, Direction.UP)); // Papercut
+             if (i >= 15) {
+                 return i;
+             } else {
+-                i = Math.max(i, this.getDirectSignal(pos.north(), Direction.NORTH));
++                i = Math.max(i, this.papercut$getDirectSignal(x, y, z - 1, Direction.NORTH)); // Papercut
+                 if (i >= 15) {
+                     return i;
+                 } else {
+-                    i = Math.max(i, this.getDirectSignal(pos.south(), Direction.SOUTH));
++                    i = Math.max(i, this.papercut$getDirectSignal(x, y, z + 1, Direction.SOUTH)); // Papercut
+                     if (i >= 15) {
+                         return i;
+                     } else {
+-                        i = Math.max(i, this.getDirectSignal(pos.west(), Direction.WEST));
++                        i = Math.max(i, this.papercut$getDirectSignal(x - 1, y, z, Direction.WEST)); // Papercut
+                         if (i >= 15) {
+                             return i;
+                         } else {
+-                            i = Math.max(i, this.getDirectSignal(pos.east(), Direction.EAST));
++                            i = Math.max(i, this.papercut$getDirectSignal(x + 1, y, z, Direction.EAST)); // Papercut
+                             return i >= 15 ? i : i;
+                         }
+                     }
+diff --git a/net/minecraft/world/level/block/AzaleaBlock.java b/net/minecraft/world/level/block/AzaleaBlock.java
+index 435a455ad2ec3dfb142d570a51a720bc6c49dac3..aebcb952c3307f0cd8a538ca4935c71e8f0deeda 100644
+--- a/net/minecraft/world/level/block/AzaleaBlock.java
++++ b/net/minecraft/world/level/block/AzaleaBlock.java
+@@ -40,7 +40,7 @@ public class AzaleaBlock extends VegetationBlock implements BonemealableBlock {
+ 
+     @Override
+     public boolean isValidBonemealTarget(LevelReader level, BlockPos pos, BlockState state) {
+-        return level.getFluidState(pos.above()).isEmpty();
++        return level.papercut$getFluidState(pos.getX(), pos. getY() + 1, pos.getZ()).isEmpty(); // Papercut
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/level/block/BannerBlock.java b/net/minecraft/world/level/block/BannerBlock.java
+index 28d58ef06721105defe1f2dcb0c611ef1a04a697..e42faa018271ebdf0d6f9682495c2844e7bc2215 100644
+--- a/net/minecraft/world/level/block/BannerBlock.java
++++ b/net/minecraft/world/level/block/BannerBlock.java
+@@ -43,7 +43,7 @@ public class BannerBlock extends AbstractBannerBlock {
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        return level.getBlockState(pos.below()).isSolid();
++        return level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()).isSolid(); // Papercut
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/level/block/BaseCoralPlantTypeBlock.java b/net/minecraft/world/level/block/BaseCoralPlantTypeBlock.java
+index e348412960da6623cf8d878ea37af05e6b606adc..662bd9cdd57fdb2994119cc055408cc914365a27 100644
+--- a/net/minecraft/world/level/block/BaseCoralPlantTypeBlock.java
++++ b/net/minecraft/world/level/block/BaseCoralPlantTypeBlock.java
+@@ -42,8 +42,14 @@ public abstract class BaseCoralPlantTypeBlock extends Block implements SimpleWat
+         if (state.getValue(WATERLOGGED)) {
+             return true;
+         } else {
+-            for (Direction direction : Direction.values()) {
+-                if (level.getFluidState(pos.relative(direction)).is(FluidTags.WATER)) {
++            // Papercut
++            final int x = pos.getX();
++            final int y = pos.getY();
++            final int z = pos.getZ();
++            for (Direction direction : Direction.VALUES) {
++                if (level.papercut$getFluidState(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ(
++                        // Papercut
++                )).is(FluidTags.WATER)) {
+                     return true;
+                 }
+             }
+diff --git a/net/minecraft/world/level/block/BaseFireBlock.java b/net/minecraft/world/level/block/BaseFireBlock.java
+index 1ff7387320928af6630b9e0cbc30199b4770737d..5acaf762bf0e67aed6a10f9ffd31558baae0ea49 100644
+--- a/net/minecraft/world/level/block/BaseFireBlock.java
++++ b/net/minecraft/world/level/block/BaseFireBlock.java
+@@ -43,8 +43,7 @@ public abstract class BaseFireBlock extends Block {
+     }
+ 
+     public static BlockState getState(BlockGetter level, BlockPos pos) {
+-        BlockPos blockPos = pos.below();
+-        BlockState blockState = level.getBlockState(blockPos);
++        BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()); // Papercut
+         return SoulFireBlock.canSurviveOnBlock(blockState) ? Blocks.SOUL_FIRE.defaultBlockState() : ((FireBlock)Blocks.FIRE).getStateForPlacement(level, pos);
+     }
+ 
+@@ -204,11 +203,15 @@ public abstract class BaseFireBlock extends Block {
+         if (!inPortalDimension(level)) {
+             return false;
+         } else {
+-            BlockPos.MutableBlockPos mutableBlockPos = pos.mutable();
++            // Papercut
++            final int x = pos.getX();
++            final int y = pos.getY();
++            final int z = pos.getZ();
++            // Papercut
+             boolean flag = false;
+ 
+-            for (Direction direction1 : Direction.values()) {
+-                if (level.getBlockState(mutableBlockPos.set(pos).move(direction1)).is(Blocks.OBSIDIAN)) {
++            for (Direction direction1 : Direction.VALUES) { // Papercut
++                if (level.papercut$getBlockState(x + direction1.getStepX(), y + direction1.getStepY(), z + direction1.getStepZ()).is(Blocks.OBSIDIAN)) { // Papercut
+                     flag = true;
+                     break;
+                 }
+diff --git a/net/minecraft/world/level/block/BasePressurePlateBlock.java b/net/minecraft/world/level/block/BasePressurePlateBlock.java
+index 7135a6bc87f90fafa94d0783aaf7b42d66449010..ec23e794e03d8562c4c8bbc79f149a4cd32041d1 100644
+--- a/net/minecraft/world/level/block/BasePressurePlateBlock.java
++++ b/net/minecraft/world/level/block/BasePressurePlateBlock.java
+@@ -146,6 +146,16 @@ public abstract class BasePressurePlateBlock extends Block {
+     protected int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+         return side == Direction.UP ? this.getSignalForState(state) : 0;
+     }
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction direction) {
++        return this.getSignalForState(blockState);
++    }
++    @Override
++    protected int papercut$getDirectSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction side) {
++        return side == Direction.UP ? this.getSignalForState(blockState) : 0;
++    }
++    // Papercut
+ 
+     @Override
+     protected boolean isSignalSource(BlockState state) {
+diff --git a/net/minecraft/world/level/block/BigDripleafBlock.java b/net/minecraft/world/level/block/BigDripleafBlock.java
+index c2ef71dd9ee070f80d32b8829b80240ff22f0f7f..ddf96c376697992551f00bcafa32e37f2fe53da7 100644
+--- a/net/minecraft/world/level/block/BigDripleafBlock.java
++++ b/net/minecraft/world/level/block/BigDripleafBlock.java
+@@ -136,8 +136,7 @@ public class BigDripleafBlock extends HorizontalDirectionalBlock implements Bone
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        BlockPos blockPos = pos.below();
+-        BlockState blockState = level.getBlockState(blockPos);
++        BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()); // Papercut
+         return blockState.is(this) || blockState.is(Blocks.BIG_DRIPLEAF_STEM) || blockState.is(BlockTags.BIG_DRIPLEAF_PLACEABLE);
+     }
+ 
+@@ -167,7 +166,7 @@ public class BigDripleafBlock extends HorizontalDirectionalBlock implements Bone
+ 
+     @Override
+     public boolean isValidBonemealTarget(LevelReader level, BlockPos pos, BlockState state) {
+-        BlockState blockState = level.getBlockState(pos.above());
++        BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()); // Papercut
+         return canReplace(blockState);
+     }
+ 
+@@ -292,7 +291,7 @@ public class BigDripleafBlock extends HorizontalDirectionalBlock implements Bone
+ 
+     @Override
+     public BlockState getStateForPlacement(BlockPlaceContext context) {
+-        BlockState blockState = context.getLevel().getBlockState(context.getClickedPos().below());
++        BlockState blockState = context.getLevel().papercut$getBlockState(context.getClickedPos().getX(), context.getClickedPos().getY() - 1, context.getClickedPos().getZ()); // Papercut
+         FluidState fluidState = context.getLevel().getFluidState(context.getClickedPos());
+         boolean flag = blockState.is(Blocks.BIG_DRIPLEAF) || blockState.is(Blocks.BIG_DRIPLEAF_STEM);
+         return this.defaultBlockState()
+diff --git a/net/minecraft/world/level/block/BigDripleafStemBlock.java b/net/minecraft/world/level/block/BigDripleafStemBlock.java
+index 0ce3e60a94dff03874cad51a936f247d5c3d65ce..50957598bf0f5e0911c576fd6f725ddcd63da570 100644
+--- a/net/minecraft/world/level/block/BigDripleafStemBlock.java
++++ b/net/minecraft/world/level/block/BigDripleafStemBlock.java
+@@ -58,10 +58,14 @@ public class BigDripleafStemBlock extends HorizontalDirectionalBlock implements
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        BlockPos blockPos = pos.below();
+-        BlockState blockState = level.getBlockState(blockPos);
+-        BlockState blockState1 = level.getBlockState(pos.above());
+-        return (blockState.is(this) || blockState.is(BlockTags.BIG_DRIPLEAF_PLACEABLE)) && (blockState1.is(this) || blockState1.is(Blocks.BIG_DRIPLEAF));
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        BlockState blockState = level.papercut$getBlockState(x, y - 1, z);
++        BlockState blockState1;
++        return (blockState.is(this) || blockState.is(BlockTags.BIG_DRIPLEAF_PLACEABLE)) && ((blockState1 = level.papercut$getBlockState(x, y + 1, z)).is(this) || blockState1.is(Blocks.BIG_DRIPLEAF));
++        // Papercut
+     }
+ 
+     protected static boolean place(LevelAccessor level, BlockPos pos, FluidState fluidState, Direction direction) {
+diff --git a/net/minecraft/world/level/block/BonemealableBlock.java b/net/minecraft/world/level/block/BonemealableBlock.java
+index 676cc6cb2ea0ac25c4e4bd6a32856f07784c7b49..5ff1aab46bd3d8f7dbd59aa84583dbbdb0e56186 100644
+--- a/net/minecraft/world/level/block/BonemealableBlock.java
++++ b/net/minecraft/world/level/block/BonemealableBlock.java
+@@ -26,9 +26,17 @@ public interface BonemealableBlock {
+     }
+ 
+     private static Optional<BlockPos> getSpreadableNeighbourPos(List<Direction> directions, LevelReader level, BlockPos pos, BlockState state) {
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
+         for (Direction direction : directions) {
+-            BlockPos blockPos = pos.relative(direction);
+-            if (level.isEmptyBlock(blockPos) && state.canSurvive(level, blockPos)) {
++            final int x1 = x + direction.getStepX();
++            final int y1 = y + direction.getStepY();
++            final int z1 = z + direction.getStepZ();
++            BlockPos blockPos;
++            if (level.papercut$isEmptyBlock(x1, y1, z1) && state.canSurvive(level, blockPos = new BlockPos(x1, y1, z1))) {
++                // Papercut
+                 return Optional.of(blockPos);
+             }
+         }
+diff --git a/net/minecraft/world/level/block/BonemealableFeaturePlacerBlock.java b/net/minecraft/world/level/block/BonemealableFeaturePlacerBlock.java
+index ee701a4c5042aec359271533680d292a6169d4db..52f1219b77043a077517a3c48b53f0d2c7a77afd 100644
+--- a/net/minecraft/world/level/block/BonemealableFeaturePlacerBlock.java
++++ b/net/minecraft/world/level/block/BonemealableFeaturePlacerBlock.java
+@@ -32,7 +32,7 @@ public class BonemealableFeaturePlacerBlock extends Block implements Bonemealabl
+ 
+     @Override
+     public boolean isValidBonemealTarget(LevelReader level, BlockPos pos, BlockState state) {
+-        return level.getBlockState(pos.above()).isAir();
++        return level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()).isAir(); // Papercut
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/level/block/BrushableBlock.java b/net/minecraft/world/level/block/BrushableBlock.java
+index da74a835e79e513d5be3c23b7d1041a992317ad7..c6ed945f352a848e66e880a11509d0e888e2a2ce 100644
+--- a/net/minecraft/world/level/block/BrushableBlock.java
++++ b/net/minecraft/world/level/block/BrushableBlock.java
+@@ -85,7 +85,7 @@ public class BrushableBlock extends BaseEntityBlock implements Fallable {
+             brushableBlockEntity.checkReset(level);
+         }
+ 
+-        if (FallingBlock.isFree(level.getBlockState(pos.below())) && pos.getY() >= level.getMinY()) {
++        if (FallingBlock.isFree(level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ())) && pos.getY() >= level.getMinY()) { // Papercut
+             FallingBlockEntity fallingBlockEntity = FallingBlockEntity.fall(level, pos, state);
+             fallingBlockEntity.disableDrop();
+         }
+diff --git a/net/minecraft/world/level/block/BubbleColumnBlock.java b/net/minecraft/world/level/block/BubbleColumnBlock.java
+index 596640c1473b8526b8bb57c5714a84ee55372d07..83d23a2781f3baa54260f340b56b8b2466092124 100644
+--- a/net/minecraft/world/level/block/BubbleColumnBlock.java
++++ b/net/minecraft/world/level/block/BubbleColumnBlock.java
+@@ -51,7 +51,7 @@ public class BubbleColumnBlock extends Block implements BucketPickup {
+     protected void entityInside(BlockState state, Level level, BlockPos pos, Entity entity, InsideBlockEffectApplier effectApplier, boolean pastEdges) {
+         if (!new io.papermc.paper.event.entity.EntityInsideBlockEvent(entity.getBukkitEntity(), org.bukkit.craftbukkit.block.CraftBlock.at(level, pos)).callEvent()) { return; } // Paper - Add EntityInsideBlockEvent
+         if (pastEdges) {
+-            BlockState blockState = level.getBlockState(pos.above());
++            BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()); // Papercut
+             boolean flag = blockState.getCollisionShape(level, pos).isEmpty() && blockState.getFluidState().isEmpty();
+             if (flag) {
+                 entity.onAboveBubbleColumn(state.getValue(DRAG_DOWN), pos);
+@@ -63,7 +63,7 @@ public class BubbleColumnBlock extends Block implements BucketPickup {
+ 
+     @Override
+     protected void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
+-        updateColumn(level, pos, state, level.getBlockState(pos.below()));
++        updateColumn(level, pos, state, level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ())); // Papercut
+     }
+ 
+     @Override
+@@ -167,7 +167,7 @@ public class BubbleColumnBlock extends Block implements BucketPickup {
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        BlockState blockState = level.getBlockState(pos.below());
++        BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()); // Papercut
+         return blockState.is(Blocks.BUBBLE_COLUMN) || blockState.is(Blocks.MAGMA_BLOCK) || blockState.is(Blocks.SOUL_SAND);
+     }
+ 
+diff --git a/net/minecraft/world/level/block/BuddingAmethystBlock.java b/net/minecraft/world/level/block/BuddingAmethystBlock.java
+index 02326847187f5940751fda00a03856060ae8ae29..46001d22a85985d2f26df8f3db404ff5cf73308c 100644
+--- a/net/minecraft/world/level/block/BuddingAmethystBlock.java
++++ b/net/minecraft/world/level/block/BuddingAmethystBlock.java
+@@ -27,8 +27,10 @@ public class BuddingAmethystBlock extends AmethystBlock {
+     protected void randomTick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
+         if (random.nextInt(5) == 0) {
+             Direction direction = DIRECTIONS[random.nextInt(DIRECTIONS.length)];
+-            BlockPos blockPos = pos.relative(direction);
+-            BlockState blockState = level.getBlockState(blockPos);
++            // Papercut
++            BlockPos blockPos;
++            BlockState blockState = level.papercut$getBlockState(pos.getX() + direction.getStepX(), pos.getY() + direction.getStepY(), pos.getZ() + direction.getStepZ());
++            // Papercut
+             Block block = null;
+             if (canClusterGrowAtState(blockState)) {
+                 block = Blocks.SMALL_AMETHYST_BUD;
+@@ -45,6 +47,7 @@ public class BuddingAmethystBlock extends AmethystBlock {
+                     .setValue(AmethystClusterBlock.FACING, direction)
+                     .setValue(AmethystClusterBlock.WATERLOGGED, blockState.getFluidState().getType() == Fluids.WATER);
+                 // Paper start - Have Amethyst throw both spread and grow events
++                blockPos = pos.relative(direction); // Papercut
+                 if (block == Blocks.SMALL_AMETHYST_BUD) {
+                     org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockSpreadEvent(level, pos, blockPos, blockState1, Block.UPDATE_ALL); // CraftBukkit
+                 } else {
+diff --git a/net/minecraft/world/level/block/ButtonBlock.java b/net/minecraft/world/level/block/ButtonBlock.java
+index 27ca29f1d3e0e68229edef3b32634ce9b054824a..e419aff3f991773e0e7e745a12e5803fb0fe6339 100644
+--- a/net/minecraft/world/level/block/ButtonBlock.java
++++ b/net/minecraft/world/level/block/ButtonBlock.java
+@@ -148,6 +148,16 @@ public class ButtonBlock extends FaceAttachedHorizontalDirectionalBlock {
+     protected int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+         return state.getValue(POWERED) && getConnectedDirection(state) == side ? 15 : 0;
+     }
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction direction) {
++        return blockState.getValue(POWERED) ? 15 : 0;
++    }
++    @Override
++    protected int papercut$getDirectSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction side) {
++        return blockState.getValue(POWERED) && getConnectedDirection(blockState) == side ? 15 : 0;
++    }
++    // Papercut
+ 
+     @Override
+     protected boolean isSignalSource(BlockState state) {
+diff --git a/net/minecraft/world/level/block/CakeBlock.java b/net/minecraft/world/level/block/CakeBlock.java
+index cca7bde128f88df4327e6b011c301f60d909bb4d..85697136456176a0e5a56b60fe1f7e4824243b52 100644
+--- a/net/minecraft/world/level/block/CakeBlock.java
++++ b/net/minecraft/world/level/block/CakeBlock.java
+@@ -145,7 +145,7 @@ public class CakeBlock extends Block {
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        return level.getBlockState(pos.below()).isSolid();
++        return level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()).isSolid(); // Papercut
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/level/block/CalibratedSculkSensorBlock.java b/net/minecraft/world/level/block/CalibratedSculkSensorBlock.java
+index 354c9a2c8844e8b9bb6433ac3691294c460ee72c..51e33bf1c8714846e5cec3aedb16f70ed52d9d26 100644
+--- a/net/minecraft/world/level/block/CalibratedSculkSensorBlock.java
++++ b/net/minecraft/world/level/block/CalibratedSculkSensorBlock.java
+@@ -57,6 +57,12 @@ public class CalibratedSculkSensorBlock extends SculkSensorBlock {
+     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
+         return direction != state.getValue(FACING) ? super.getSignal(state, level, pos, direction) : 0;
+     }
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState state, BlockGetter level,int x, int y, int z, Direction direction) {
++        return direction != state.getValue(FACING) ? super.papercut$getSignal(state, level, x, y, z, direction) : 0;
++    }
++    // Papercut
+ 
+     @Override
+     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+diff --git a/net/minecraft/world/level/block/CandleCakeBlock.java b/net/minecraft/world/level/block/CandleCakeBlock.java
+index 34701a08001e88fc21af6b315213498d792a23f9..8e32cde2ef5ae4a534262439c3327aadef4c0e42 100644
+--- a/net/minecraft/world/level/block/CandleCakeBlock.java
++++ b/net/minecraft/world/level/block/CandleCakeBlock.java
+@@ -125,7 +125,7 @@ public class CandleCakeBlock extends AbstractCandleBlock {
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        return level.getBlockState(pos.below()).isSolid();
++        return level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()).isSolid(); // Papercut
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/level/block/CeilingHangingSignBlock.java b/net/minecraft/world/level/block/CeilingHangingSignBlock.java
+index 6b7e525aa44e4e1fafbae7d9e196dddcfc8787ac..5498aebc1aca700a94a202b8516033e38ba8337b 100644
+--- a/net/minecraft/world/level/block/CeilingHangingSignBlock.java
++++ b/net/minecraft/world/level/block/CeilingHangingSignBlock.java
+@@ -82,7 +82,10 @@ public class CeilingHangingSignBlock extends SignBlock {
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        return level.getBlockState(pos.above()).isFaceSturdy(level, pos.above(), Direction.DOWN, SupportType.CENTER);
++        // Papercut
++        BlockPos above = pos.above();
++        return level.getBlockState(above).isFaceSturdy(level, above, Direction.DOWN, SupportType.CENTER);
++        // Papercut
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/level/block/ChorusFlowerBlock.java b/net/minecraft/world/level/block/ChorusFlowerBlock.java
+index 184c971852a9eb387484e4ce89a26a69567cbeda..1a92a1bb3a5a4a149472b43228890d6b33a038cc 100644
+--- a/net/minecraft/world/level/block/ChorusFlowerBlock.java
++++ b/net/minecraft/world/level/block/ChorusFlowerBlock.java
+@@ -64,20 +64,25 @@ public class ChorusFlowerBlock extends Block {
+ 
+     @Override
+     protected void randomTick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
+-        BlockPos blockPos = pos.above();
+-        if (level.isEmptyBlock(blockPos) && blockPos.getY() <= level.getMaxY()) {
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        BlockPos blockPos;
++        if (level.papercut$isEmptyBlock(x, y + 1, z) && (y + 1) <= level.getMaxY()) {
++            // Papercut
+             int ageValue = state.getValue(AGE);
+             if (ageValue < 5) {
+                 boolean flag = false;
+                 boolean flag1 = false;
+-                BlockState blockState = level.getBlockState(pos.below());
++                BlockState blockState = level.papercut$getBlockState(x, y - 1, z); // Papercut
+                 if (blockState.is(Blocks.END_STONE)) {
+                     flag = true;
+                 } else if (blockState.is(this.plant)) {
+                     int i = 1;
+ 
+                     for (int i1 = 0; i1 < 4; i1++) {
+-                        BlockState blockState1 = level.getBlockState(pos.below(i + 1));
++                        BlockState blockState1 = level.papercut$getBlockState(x, y - (i + 1), z); // Papercut
+                         if (!blockState1.is(this.plant)) {
+                             if (blockState1.is(Blocks.END_STONE)) {
+                                 flag1 = true;
+@@ -95,8 +100,10 @@ public class ChorusFlowerBlock extends Block {
+                     flag = true;
+                 }
+ 
+-                if (flag && allNeighborsEmpty(level, blockPos, null) && level.isEmptyBlock(pos.above(2))) {
+-                    if (org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockSpreadEvent(level, pos, blockPos, this.defaultBlockState().setValue(AGE, ageValue), Block.UPDATE_CLIENTS)) { // CraftBukkit - add event
++                // Papercut
++                if (flag && allNeighborsEmpty(level, x, y + 1, z, null) && level.papercut$isEmptyBlock(x, y + 2, z)) {
++                    if (org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockSpreadEvent(level, pos, blockPos = pos.above(), this.defaultBlockState().setValue(AGE, ageValue), Block.UPDATE_CLIENTS)) { // CraftBukkit - add event
++                        // Papercut
+                     level.setBlock(pos, ChorusPlantBlock.getStateWithConnections(level, pos, this.plant.defaultBlockState()), Block.UPDATE_CLIENTS);
+                     this.placeGrownFlower(level, blockPos, ageValue);
+                     } // CraftBukkit
+@@ -110,11 +117,16 @@ public class ChorusFlowerBlock extends Block {
+ 
+                     for (int i2 = 0; i2 < i; i2++) {
+                         Direction randomDirection = Direction.Plane.HORIZONTAL.getRandomDirection(random);
+-                        BlockPos blockPos1 = pos.relative(randomDirection);
+-                        if (level.isEmptyBlock(blockPos1)
+-                            && level.isEmptyBlock(blockPos1.below())
+-                            && allNeighborsEmpty(level, blockPos1, randomDirection.getOpposite())) {
+-                            if (org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockSpreadEvent(level, pos, blockPos1, this.defaultBlockState().setValue(AGE, ageValue + 1), Block.UPDATE_CLIENTS)) { // CraftBukkit - add event
++                        // Papercut
++                        final int x1 = x + randomDirection.getStepX();
++                        final int y1 = y + randomDirection.getStepY();
++                        final int z1 = z + randomDirection.getStepZ();
++                        BlockPos blockPos1;
++                        if (level.papercut$isEmptyBlock(x1, y1, z1)
++                                && level.papercut$isEmptyBlock(x1, y1 - 1, z1)
++                                && allNeighborsEmpty(level, x1, y1, z1, randomDirection.getOpposite())) {
++                            if (org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockSpreadEvent(level, pos, blockPos1 = pos.relative(randomDirection), this.defaultBlockState().setValue(AGE, ageValue + 1), Block.UPDATE_CLIENTS)) { // CraftBukkit - add event
++                                // Papercut
+                             this.placeGrownFlower(level, blockPos1, ageValue + 1);
+                             flag2 = true;
+                             } // CraftBukkit
+@@ -151,9 +163,11 @@ public class ChorusFlowerBlock extends Block {
+         level.levelEvent(LevelEvent.SOUND_CHORUS_DEATH, pos, 0);
+     }
+ 
+-    private static boolean allNeighborsEmpty(LevelReader level, BlockPos pos, @Nullable Direction excludingSide) {
+-        for (Direction direction : Direction.Plane.HORIZONTAL) {
+-            if (direction != excludingSide && !level.isEmptyBlock(pos.relative(direction))) {
++    // Papercut
++    private static boolean allNeighborsEmpty(LevelReader level, int x, int y, int z, @Nullable Direction excludingSide) {
++        for (Direction direction : Direction.Plane.HORIZONTAL.faces) {
++            if (direction != excludingSide && !level.papercut$isEmptyBlock(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ())) {
++                // Papercut
+                 return false;
+             }
+         }
+@@ -181,15 +195,20 @@ public class ChorusFlowerBlock extends Block {
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        BlockState blockState = level.getBlockState(pos.below());
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        BlockState blockState = level.papercut$getBlockState(x, y - 1, z);
++        // Papercut
+         if (!blockState.is(this.plant) && !blockState.is(Blocks.END_STONE)) {
+             if (!blockState.isAir()) {
+                 return false;
+             } else {
+                 boolean flag = false;
+ 
+-                for (Direction direction : Direction.Plane.HORIZONTAL) {
+-                    BlockState blockState1 = level.getBlockState(pos.relative(direction));
++                for (Direction direction : Direction.Plane.HORIZONTAL.faces) {
++                    BlockState blockState1 = level.papercut$getBlockState(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ()); // Papercut
+                     if (blockState1.is(this.plant)) {
+                         if (flag) {
+                             return false;
+@@ -226,12 +245,17 @@ public class ChorusFlowerBlock extends Block {
+         if (iterations == 0) {
+             i++;
+         }
++        // Papercut
++        final int x = branchPos.getX();
++        final int y = branchPos.getY();
++        final int z = branchPos.getZ();
++        // Papercut
+ 
+         for (int i1 = 0; i1 < i; i1++) {
+-            BlockPos blockPos = branchPos.above(i1 + 1);
+-            if (!allNeighborsEmpty(level, blockPos, null)) {
++            if (!allNeighborsEmpty(level, x, y + (i1 + 1), z, null)) { // Papercut
+                 return;
+             }
++            BlockPos blockPos = branchPos.above(i1 + 1); // Papercut
+ 
+             level.setBlock(blockPos, ChorusPlantBlock.getStateWithConnections(level, blockPos, block.defaultBlockState()), Block.UPDATE_CLIENTS);
+             level.setBlock(blockPos.below(), ChorusPlantBlock.getStateWithConnections(level, blockPos.below(), block.defaultBlockState()), Block.UPDATE_CLIENTS);
+@@ -246,12 +270,17 @@ public class ChorusFlowerBlock extends Block {
+ 
+             for (int i2 = 0; i2 < randomInt; i2++) {
+                 Direction randomDirection = Direction.Plane.HORIZONTAL.getRandomDirection(random);
+-                BlockPos blockPos1 = branchPos.above(i).relative(randomDirection);
+-                if (Math.abs(blockPos1.getX() - originalBranchPos.getX()) < maxHorizontalDistance
+-                    && Math.abs(blockPos1.getZ() - originalBranchPos.getZ()) < maxHorizontalDistance
+-                    && level.isEmptyBlock(blockPos1)
+-                    && level.isEmptyBlock(blockPos1.below())
+-                    && allNeighborsEmpty(level, blockPos1, randomDirection.getOpposite())) {
++                // Papercut
++                final int x1 = x + randomDirection.getStepX();
++                final int y1 = (y + i) + randomDirection.getStepY();
++                final int z1 = z + randomDirection.getStepZ();
++                if (Math.abs(x1 - originalBranchPos.getX()) < maxHorizontalDistance
++                        && Math.abs(z1 - originalBranchPos.getZ()) < maxHorizontalDistance
++                        && level.papercut$isEmptyBlock(x1, y1, z1)
++                        && level.papercut$isEmptyBlock(x1, y1 - 1, z1)
++                        && allNeighborsEmpty(level, x1, y1, z1, randomDirection.getOpposite())) {
++                    BlockPos blockPos1 = new BlockPos(x1, y1, z1); // Moved down
++                    // Papercut
+                     flag = true;
+                     level.setBlock(blockPos1, ChorusPlantBlock.getStateWithConnections(level, blockPos1, block.defaultBlockState()), Block.UPDATE_CLIENTS);
+                     level.setBlock(
+diff --git a/net/minecraft/world/level/block/ChorusPlantBlock.java b/net/minecraft/world/level/block/ChorusPlantBlock.java
+index 47f3b008b252678105368dc577ed66353ff50eb3..611314bf290b533c00edd5a83264906686547867 100644
+--- a/net/minecraft/world/level/block/ChorusPlantBlock.java
++++ b/net/minecraft/world/level/block/ChorusPlantBlock.java
+@@ -43,12 +43,17 @@ public class ChorusPlantBlock extends PipeBlock {
+     }
+ 
+     public static BlockState getStateWithConnections(BlockGetter level, BlockPos pos, BlockState state) {
+-        BlockState blockState = level.getBlockState(pos.below());
+-        BlockState blockState1 = level.getBlockState(pos.above());
+-        BlockState blockState2 = level.getBlockState(pos.north());
+-        BlockState blockState3 = level.getBlockState(pos.east());
+-        BlockState blockState4 = level.getBlockState(pos.south());
+-        BlockState blockState5 = level.getBlockState(pos.west());
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        BlockState blockState = level.papercut$getBlockState(x, y - 1, z);
++        BlockState blockState1 = level.papercut$getBlockState(x, y + 1, z);
++        BlockState blockState2 = level.papercut$getBlockState(x, y, z - 1);
++        BlockState blockState3 = level.papercut$getBlockState(x + 1, y, z);
++        BlockState blockState4 = level.papercut$getBlockState(x, y, z + 1);
++        BlockState blockState5 = level.papercut$getBlockState(x - 1, y, z);
++        // Papercut
+         Block block = state.getBlock();
+         return state.trySetValue(DOWN, blockState.is(block) || blockState.is(Blocks.CHORUS_FLOWER) || blockState.is(Blocks.END_STONE))
+             .trySetValue(UP, blockState1.is(block) || blockState1.is(Blocks.CHORUS_FLOWER))
+@@ -92,18 +97,27 @@ public class ChorusPlantBlock extends PipeBlock {
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+         if (io.papermc.paper.configuration.GlobalConfiguration.get().blockUpdates.disableChorusPlantUpdates) return true; // Paper - add option to disable block updates
+-        BlockState blockState = level.getBlockState(pos.below());
+-        boolean flag = !level.getBlockState(pos.above()).isAir() && !blockState.isAir();
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        BlockState blockState = level.papercut$getBlockState(x, y - 1, z);
++        boolean flag = !level.papercut$getBlockState(x, y + 1, z).isAir() && !blockState.isAir();
++        // Papercut
+ 
+-        for (Direction direction : Direction.Plane.HORIZONTAL) {
+-            BlockPos blockPos = pos.relative(direction);
+-            BlockState blockState1 = level.getBlockState(blockPos);
++        for (Direction direction : Direction.Plane.HORIZONTAL.faces) {
++            // Papercut
++            final int x1 = x + direction.getStepX();
++            final int y1 = y + direction.getStepY();
++            final int z1 = z + direction.getStepZ();
++            BlockState blockState1 = level.papercut$getBlockState(x1, y1, z1);
++            // Papercut
+             if (blockState1.is(this)) {
+                 if (flag) {
+                     return false;
+                 }
+ 
+-                BlockState blockState2 = level.getBlockState(blockPos.below());
++                BlockState blockState2 = level.papercut$getBlockState(x1, y1 - 1, z1); // Papercut
+                 if (blockState2.is(this) || blockState2.is(Blocks.END_STONE)) {
+                     return true;
+                 }
+diff --git a/net/minecraft/world/level/block/CocoaBlock.java b/net/minecraft/world/level/block/CocoaBlock.java
+index d4f82e39bb688e43decfb5c8e72fd6db2bfeb571..b8bd4e7c00eb0e201f85de7d3622465ce60f62fd 100644
+--- a/net/minecraft/world/level/block/CocoaBlock.java
++++ b/net/minecraft/world/level/block/CocoaBlock.java
+@@ -60,7 +60,10 @@ public class CocoaBlock extends HorizontalDirectionalBlock implements Bonemealab
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        BlockState blockState = level.getBlockState(pos.relative(state.getValue(FACING)));
++        // Papercut
++        Direction direction = state.getValue(FACING);
++        BlockState blockState = level.papercut$getBlockState(pos.getX() + direction.getStepX(), pos.getY() + direction.getStepY(), pos.getZ() + direction.getStepZ());
++        // Papercut
+         return blockState.is(BlockTags.JUNGLE_LOGS);
+     }
+ 
+diff --git a/net/minecraft/world/level/block/ComparatorBlock.java b/net/minecraft/world/level/block/ComparatorBlock.java
+index 578e7c8dc601f53cf2a068685c6901bfaf47e763..efb6ccf0fdade3ba18532711acf5d3dc5fd44f33 100644
+--- a/net/minecraft/world/level/block/ComparatorBlock.java
++++ b/net/minecraft/world/level/block/ComparatorBlock.java
+@@ -62,6 +62,11 @@ public class ComparatorBlock extends DiodeBlock implements EntityBlock {
+             ? Blocks.AIR.defaultBlockState()
+             : super.updateShape(state, level, scheduledTickAccess, pos, direction, neighborPos, neighborState, random);
+     }
++    // Papercut
++    protected int papercut$getOutputSignal(BlockGetter level, int x, int y, int z, BlockState state) {
++        return level.getBlockEntity(new BlockPos(x, y, z)) instanceof ComparatorBlockEntity comparatorBlockEntity ? comparatorBlockEntity.getOutputSignal() : 0;
++    }
++    // Papercut
+ 
+     @Override
+     protected int getOutputSignal(BlockGetter level, BlockPos pos, BlockState state) {
+diff --git a/net/minecraft/world/level/block/CoralBlock.java b/net/minecraft/world/level/block/CoralBlock.java
+index 1c86b4fce7392851b2e33914fb588775f90f766b..364e7f61fdef8d2a8c3c5d6d6ca169d1438b383e 100644
+--- a/net/minecraft/world/level/block/CoralBlock.java
++++ b/net/minecraft/world/level/block/CoralBlock.java
+@@ -65,8 +65,13 @@ public class CoralBlock extends Block {
+     }
+ 
+     protected boolean scanForWater(BlockGetter level, BlockPos pos) {
+-        for (Direction direction : Direction.values()) {
+-            FluidState fluidState = level.getFluidState(pos.relative(direction));
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        for (Direction direction : Direction.VALUES) {
++            FluidState fluidState = level.papercut$getFluidState(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ());
++            // Papercut
+             if (fluidState.is(FluidTags.WATER)) {
+                 return true;
+             }
+diff --git a/net/minecraft/world/level/block/CreakingHeartBlock.java b/net/minecraft/world/level/block/CreakingHeartBlock.java
+index dfb9a10622ba2a0c2759bb563fefd729f1109865..f83ffaebf743956c8099a328e5f09edb15eb44b3 100644
+--- a/net/minecraft/world/level/block/CreakingHeartBlock.java
++++ b/net/minecraft/world/level/block/CreakingHeartBlock.java
+@@ -114,9 +114,14 @@ public class CreakingHeartBlock extends BaseEntityBlock {
+ 
+     public static boolean hasRequiredLogs(BlockState state, LevelReader level, BlockPos pos) {
+         Direction.Axis axis = state.getValue(AXIS);
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
+ 
+         for (Direction direction : axis.getDirections()) {
+-            BlockState blockState = level.getBlockState(pos.relative(direction));
++            BlockState blockState = level.papercut$getBlockState(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ());
++            // Papercut
+             if (!blockState.is(BlockTags.PALE_OAK_LOGS) || blockState.getValue(AXIS) != axis) {
+                 return false;
+             }
+@@ -126,9 +131,13 @@ public class CreakingHeartBlock extends BaseEntityBlock {
+     }
+ 
+     private static boolean isSurroundedByLogs(LevelAccessor level, BlockPos pos) {
+-        for (Direction direction : Direction.values()) {
+-            BlockPos blockPos = pos.relative(direction);
+-            BlockState blockState = level.getBlockState(blockPos);
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        for (Direction direction : Direction.VALUES) {
++            BlockState blockState = level.papercut$getBlockState(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ());
++            // Papercut
+             if (!blockState.is(BlockTags.PALE_OAK_LOGS)) {
+                 return false;
+             }
+diff --git a/net/minecraft/world/level/block/entity/BeaconBlockEntity.java b/net/minecraft/world/level/block/entity/BeaconBlockEntity.java
+index deaac59e24dcc8c259567545507b52ca383f391e..7357f0167deba94514bd7c7b207f3bd5338ca8a1 100644
+--- a/net/minecraft/world/level/block/entity/BeaconBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/BeaconBlockEntity.java
+@@ -165,13 +165,21 @@ public class BeaconBlockEntity extends BlockEntity implements MenuProvider, Name
+         int x = pos.getX();
+         int y = pos.getY();
+         int z = pos.getZ();
+-        BlockPos blockPos;
++        // Papercut
++        int x1;
++        int y1;
++        int z1;
+         if (blockEntity.lastCheckY < y) {
+-            blockPos = pos;
++            x1 = x;
++            y1 = y;
++            z1 = z;
+             blockEntity.checkingBeamSections = Lists.newArrayList();
+             blockEntity.lastCheckY = pos.getY() - 1;
+         } else {
+-            blockPos = new BlockPos(x, blockEntity.lastCheckY + 1, z);
++            x1 = x;
++            y1 = blockEntity.lastCheckY + 1;
++            z1 = z;
++            // Papercut
+         }
+ 
+         BeaconBeamOwner.Section section = blockEntity.checkingBeamSections.isEmpty()
+@@ -179,8 +187,11 @@ public class BeaconBlockEntity extends BlockEntity implements MenuProvider, Name
+             : blockEntity.checkingBeamSections.get(blockEntity.checkingBeamSections.size() - 1);
+         int height = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
+ 
+-        for (int i = 0; i < 10 && blockPos.getY() <= height; i++) {
+-            BlockState blockState = level.getBlockState(blockPos);
++        // Papercut
++        net.minecraft.world.level.chunk.LevelChunk chunk = level.getChunk(x1 >> 4, z1 >> 4);
++        for (int i = 0; i < 10 && y1 <= height; i++) {
++            BlockState blockState = chunk.getBlockStateFinal(x1, y1, z1);
++            // Papercut
+             if (blockState.getBlock() instanceof BeaconBeamBlock beaconBeamBlock) {
+                 int textureDiffuseColor = beaconBeamBlock.getColor().getTextureDiffuseColor();
+                 if (blockEntity.checkingBeamSections.size() <= 1) {
+@@ -204,7 +215,7 @@ public class BeaconBlockEntity extends BlockEntity implements MenuProvider, Name
+                 section.increaseHeight();
+             }
+ 
+-            blockPos = blockPos.above();
++            y1++;
+             blockEntity.lastCheckY++;
+         }
+ 
+@@ -261,7 +272,7 @@ public class BeaconBlockEntity extends BlockEntity implements MenuProvider, Name
+ 
+             for (int i3 = x - i1; i3 <= x + i1 && flag; i3++) {
+                 for (int i4 = z - i1; i4 <= z + i1; i4++) {
+-                    if (!level.getBlockState(new BlockPos(i3, i2, i4)).is(BlockTags.BEACON_BASE_BLOCKS)) {
++                    if (!level.papercut$getBlockState(i3, i2, i4).is(BlockTags.BEACON_BASE_BLOCKS)) { // Papercut
+                         flag = false;
+                         break;
+                     }
+diff --git a/net/minecraft/world/level/block/entity/ChestBlockEntity.java b/net/minecraft/world/level/block/entity/ChestBlockEntity.java
+index 6b1299c20573ca009f6bffce829a4a593f548fce..7b4782d7280ea72aed2a14a47f9fa829bed3bbb3 100644
+--- a/net/minecraft/world/level/block/entity/ChestBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/ChestBlockEntity.java
+@@ -207,6 +207,18 @@ public class ChestBlockEntity extends RandomizableContainerBlockEntity implement
+ 
+         return 0;
+     }
++    // Papercut
++    public static int papercut$getOpenCount(BlockGetter level, int x, int y, int z) {
++        BlockState blockState = level.papercut$getBlockState(x, y, z);
++        if (blockState.hasBlockEntity()) {
++            BlockEntity blockEntity = level.getBlockEntity(new BlockPos(x, y, z));
++            if (blockEntity instanceof ChestBlockEntity) {
++                return ((ChestBlockEntity)blockEntity).openersCounter.getOpenerCount();
++            }
++        }
++        return 0;
++    }
++    // Papercut
+ 
+     public static void swapContents(ChestBlockEntity chest, ChestBlockEntity otherChest) {
+         NonNullList<ItemStack> items = chest.getItems();
+diff --git a/net/minecraft/world/level/block/entity/CreakingHeartBlockEntity.java b/net/minecraft/world/level/block/entity/CreakingHeartBlockEntity.java
+index 0b07941d3a7f93a99c3744a26820fd7d315360b6..8918f86592027cad6ac79040c2b818794c26617c 100644
+--- a/net/minecraft/world/level/block/entity/CreakingHeartBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/CreakingHeartBlockEntity.java
+@@ -89,9 +89,11 @@ public class CreakingHeartBlockEntity extends BlockEntity {
+                     Vec3 vec3 = Vec3.atCenterOf(pos);
+                     float f = 0.2F + 0.8F * (100 - creakingHeart.emitter) / 100.0F;
+                     Vec3 vec31 = vec3.subtract(creakingHeart.emitterTarget).scale(f).add(creakingHeart.emitterTarget);
+-                    BlockPos blockPos = BlockPos.containing(vec31);
++                    // Papercut
++                    long blockPos = vec31.asBlockPosLong();
+                     float f1 = creakingHeart.emitter / 2.0F / 100.0F + 0.5F;
+-                    serverLevel.playSound(null, blockPos, SoundEvents.CREAKING_HEART_HURT, SoundSource.BLOCKS, f1, 1.0F);
++                    serverLevel.playSound(null, BlockPos.getX(blockPos) + 0.5, BlockPos.getY(blockPos) + 0.5, BlockPos.getZ(blockPos) + 0.5, SoundEvents.CREAKING_HEART_HURT, SoundSource.BLOCKS, f1, 1.0F);
++                    // Papercut
+                 }
+ 
+                 creakingHeart.emitter--;
+diff --git a/net/minecraft/world/level/block/grower/TreeGrower.java b/net/minecraft/world/level/block/grower/TreeGrower.java
+index b59e0f5f093b638b780913b044e60b40f6e43b4b..0541ae3d9ccbe96760be0cb04bff7f6fed3e80e2 100644
+--- a/net/minecraft/world/level/block/grower/TreeGrower.java
++++ b/net/minecraft/world/level/block/grower/TreeGrower.java
+@@ -183,14 +183,36 @@ public final class TreeGrower {
+ 
+     private static boolean isTwoByTwoSapling(BlockState state, BlockGetter level, BlockPos pos, int xOffset, int yOffset) {
+         Block block = state.getBlock();
+-        return level.getBlockState(pos.offset(xOffset, 0, yOffset)).is(block)
+-            && level.getBlockState(pos.offset(xOffset + 1, 0, yOffset)).is(block)
+-            && level.getBlockState(pos.offset(xOffset, 0, yOffset + 1)).is(block)
+-            && level.getBlockState(pos.offset(xOffset + 1, 0, yOffset + 1)).is(block);
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        return level.papercut$getBlockState(x + xOffset, y, z + yOffset).is(block)
++                && level.papercut$getBlockState(x + xOffset + 1, y, z + yOffset).is(block)
++                && level.papercut$getBlockState(x + xOffset, y, z + yOffset + 1).is(block)
++                && level.papercut$getBlockState(x + xOffset + 1, y, z + yOffset + 1).is(block);
++        // Papercut
+     }
+ 
+     private boolean hasFlowers(LevelAccessor level, BlockPos pos) {
+-        for (BlockPos blockPos : BlockPos.MutableBlockPos.betweenClosed(pos.below().north(2).west(2), pos.above().south(2).east(2))) {
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        final int x1 = x - 2;
++        final int x2 = x + 2;
++        final int y1 = y - 1;
++        final int y2 = y + 1;
++        final int z1 = z - 2;
++        final int z2 = z + 2;
++        final int minX = Math.min(x1, x2);
++        final int minY = Math.min(y1, y2);
++        final int minZ = Math.min(z1, z2);
++        final int maxX = Math.max(x1, x2);
++        final int maxY = Math.max(y1, y2);
++        final int maxZ = Math.max(z1, z2);
++        for (BlockPos blockPos : BlockPos.MutableBlockPos.betweenClosed(minX, minY, minZ, maxX, maxY, maxZ)) {
++            // Papercut
+             if (level.getBlockState(blockPos).is(BlockTags.FLOWERS)) {
+                 return true;
+             }
+diff --git a/net/minecraft/world/level/block/state/BlockBehaviour.java b/net/minecraft/world/level/block/state/BlockBehaviour.java
+index c5953d5751e655e121e459aaab35e7719948e69e..61e811be743a0b0a45225af58cabef15696f4843 100644
+--- a/net/minecraft/world/level/block/state/BlockBehaviour.java
++++ b/net/minecraft/world/level/block/state/BlockBehaviour.java
+@@ -368,6 +368,11 @@ public abstract class BlockBehaviour implements FeatureElement {
+     protected int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
+         return 0;
+     }
++    // Papercut
++    protected int papercut$getSignal(BlockState state, BlockGetter level, int x, int y, int z, Direction direction) {
++        return 0;
++    }
++    // Papercut
+ 
+     protected void entityInside(BlockState state, Level level, BlockPos pos, Entity entity, InsideBlockEffectApplier effectApplier, boolean pastEdges) {
+     }
+@@ -375,6 +380,11 @@ public abstract class BlockBehaviour implements FeatureElement {
+     protected int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
+         return 0;
+     }
++    // Papercut
++    protected int papercut$getDirectSignal(BlockState state, BlockGetter level, int x, int y, int z, Direction direction) {
++        return 0;
++    }
++    // Papercut
+ 
+     public final Optional<ResourceKey<LootTable>> getLootTable() {
+         return this.drops;
+@@ -740,6 +750,11 @@ public abstract class BlockBehaviour implements FeatureElement {
+         public int getSignal(BlockGetter level, BlockPos pos, Direction direction) {
+             return this.getBlock().getSignal(this.asState(), level, pos, direction);
+         }
++        // Papercut
++        public int papercut$getSignal(BlockGetter level, int x, int y, int z, Direction direction) {
++            return this.getBlock().papercut$getSignal(this.asState(), level, x, y, z, direction);
++        }
++        // Papercut
+ 
+         public boolean hasAnalogOutputSignal() {
+             return this.getBlock().hasAnalogOutputSignal(this.asState());
+@@ -760,6 +775,11 @@ public abstract class BlockBehaviour implements FeatureElement {
+         public int getDirectSignal(BlockGetter level, BlockPos pos, Direction direction) {
+             return this.getBlock().getDirectSignal(this.asState(), level, pos, direction);
+         }
++        // Papercut
++        public int papercut$getDirectSignal(BlockGetter level, int x, int y, int z, Direction direction) {
++            return this.getBlock().papercut$getDirectSignal(this.asState(), level, x, y, z, direction);
++        }
++        // Papercut
+ 
+         public PushReaction getPistonPushReaction() {
+             return !this.isDestroyable() ? PushReaction.BLOCK : this.pushReaction; // Paper - Protect Bedrock and End Portal/Frames from being destroyed
+diff --git a/net/minecraft/world/level/chunk/LevelChunk.java b/net/minecraft/world/level/chunk/LevelChunk.java
+index dfc3d047f25499820f84d858ccc29c90f2fe3fbc..6fabc6c24cb2aa98454b3e140cbd859bbaf957f2 100644
+--- a/net/minecraft/world/level/chunk/LevelChunk.java
++++ b/net/minecraft/world/level/chunk/LevelChunk.java
+@@ -474,6 +474,40 @@ public class LevelChunk extends ChunkAccess implements DebugValueSource, ca.spot
+     public @Nullable BlockEntity getBlockEntity(BlockPos pos) {
+         return this.getBlockEntity(pos, LevelChunk.EntityCreationType.CHECK);
+     }
++    // Papercut
++    @Override
++    public BlockState papercut$getBlockState(int x, int y, int z) {
++        return getBlockStateFinal(x, y, z);
++    }
++    @Override
++    public BlockState papercut$getBlockState(long packedPos) {
++        return getBlockStateFinal(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public BlockState papercut$getBlockStateIfLoaded(int x, int y, int z) {
++        return getBlockStateFinal(x, y, z);
++    }
++    @Override
++    public BlockState papercut$getBlockStateIfLoaded(long packedPos) {
++        return getBlockStateFinal(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public FluidState papercut$getFluidState(int x, int y, int z) {
++        return getFluidState(x, y, z);
++    }
++    @Override
++    public FluidState papercut$getFluidState(long packedPos) {
++        return getFluidState(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public FluidState papercut$getFluidStateIfLoaded(int x, int y, int z) {
++        return getFluidState(x, y, z);
++    }
++    @Override
++    public FluidState papercut$getFluidStateIfLoaded(long packedPos) {
++        return getFluidState(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    // Papercut
+ 
+     public @Nullable BlockEntity getBlockEntity(BlockPos pos, LevelChunk.EntityCreationType creationType) {
+         // CraftBukkit start
+diff --git a/net/minecraft/world/level/chunk/ProtoChunk.java b/net/minecraft/world/level/chunk/ProtoChunk.java
+index fd923d89d4456f0b13d97ef6fa90815a27e2e734..3439fa6ab78d51e2ce9ff211393b1b9efef73455 100644
+--- a/net/minecraft/world/level/chunk/ProtoChunk.java
++++ b/net/minecraft/world/level/chunk/ProtoChunk.java
+@@ -196,6 +196,42 @@ public class ProtoChunk extends ChunkAccess {
+     public @Nullable BlockEntity getBlockEntity(BlockPos pos) {
+         return this.blockEntities.get(pos);
+     }
++    // Papercut
++    @Override
++    public BlockState papercut$getBlockState(int x, int y, int z) {
++        return getBlockState(x, y, z);
++    }
++    @Override
++    public BlockState papercut$getBlockState(long packedPos) {
++        return getBlockState(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public BlockState papercut$getBlockStateIfLoaded(int x, int y, int z) {
++        return getBlockState(x, y, z);
++    }
++    @Override
++    public BlockState papercut$getBlockStateIfLoaded(long packedPos) {
++        return getBlockState(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public FluidState papercut$getFluidState(int x, int y, int z) {
++        if (this.isOutsideBuildHeight(y))
++            return Fluids.EMPTY.defaultFluidState();
++        LevelChunkSection section = this.getSection(this.getSectionIndex(y));
++        return section.hasOnlyAir() ? Fluids.EMPTY.defaultFluidState() : section.getFluidState(x & 15, y & 15, z & 15);
++    }
++    @Override
++    public FluidState papercut$getFluidState(long packedPos) {
++        return papercut$getFluidState(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    @Override
++    public FluidState papercut$getFluidStateIfLoaded(int x, int y, int z) {
++        return papercut$getFluidState(x, y, z);
++    }
++    @Override public FluidState papercut$getFluidStateIfLoaded(long packedPos) {
++        return papercut$getFluidState(BlockPos.getX(packedPos), BlockPos.getY(packedPos), BlockPos.getZ(packedPos));
++    }
++    // Papercut
+ 
+     public Map<BlockPos, BlockEntity> getBlockEntities() {
+         return this.blockEntities;
+diff --git a/net/minecraft/world/level/material/FlowingFluid.java b/net/minecraft/world/level/material/FlowingFluid.java
+index 85e9ec8061fc01d39977f6db314da14b1e7725e1..b18fa170c04f1c473453c999d8ce20214185cc79 100644
+--- a/net/minecraft/world/level/material/FlowingFluid.java
++++ b/net/minecraft/world/level/material/FlowingFluid.java
+@@ -107,8 +107,7 @@ public abstract class FlowingFluid extends Fluid {
+                 float f = 0.0F;
+                 if (ownHeight == 0.0F) {
+                     if (!level.getBlockState(mutableBlockPos).blocksMotion()) {
+-                        BlockPos blockPos = mutableBlockPos.below();
+-                        FluidState fluidState2 = level.getFluidState(blockPos);
++                        FluidState fluidState2 = level.papercut$getFluidState(mutableBlockPos.getX(), mutableBlockPos.getY() - 1, mutableBlockPos.getZ()); // Papercut
+                         if (this.affectsFlow(fluidState2)) {
+                             ownHeight = fluidState2.getOwnHeight();
+                             if (ownHeight > 0.0F) {
+@@ -393,9 +392,13 @@ public abstract class FlowingFluid extends Fluid {
+     private int sourceNeighborCount(LevelReader level, BlockPos pos) {
+         int i = 0;
+ 
+-        for (Direction direction : Direction.Plane.HORIZONTAL) {
+-            BlockPos blockPos = pos.relative(direction);
+-            FluidState fluidState = level.getFluidState(blockPos);
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        for (Direction direction : Direction.Plane.HORIZONTAL.faces) {
++            FluidState fluidState = level.papercut$getFluidState(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ());
++            // Papercut
+             if (this.isSourceBlockOfThisType(fluidState)) {
+                 i++;
+             }
+@@ -514,7 +517,7 @@ public abstract class FlowingFluid extends Fluid {
+     }
+ 
+     private static boolean hasSameAbove(FluidState fluidState, BlockGetter level, BlockPos pos) {
+-        return fluidState.getType().isSame(level.getFluidState(pos.above()).getType());
++        return fluidState.getType().isSame(level.papercut$getFluidState(pos.getX(), pos.getY() + 1, pos.getZ()).getType()); // Papercut
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/level/material/FluidState.java b/net/minecraft/world/level/material/FluidState.java
+index 3e5ada4a84bc1da06102dfacb0d3d45a4fc6db8a..66bc3ed67db9d321c9b9aaca1e356ccbda395f32 100644
+--- a/net/minecraft/world/level/material/FluidState.java
++++ b/net/minecraft/world/level/material/FluidState.java
+@@ -164,6 +164,7 @@ public final class FluidState extends StateHolder<Fluid, FluidState> implements
+     public Stream<TagKey<Fluid>> getTags() {
+         return this.owner.builtInRegistryHolder().tags();
+     }
++    public java.util.Collection<TagKey<Fluid>> papercut$tags() { return this.owner.builtInRegistryHolder().papercut$tags(); } // Papercut
+ 
+     public void entityInside(Level level, BlockPos pos, Entity entity, InsideBlockEffectApplier effectApplier) {
+         this.getType().entityInside(level, pos, entity, effectApplier);
+diff --git a/net/minecraft/world/phys/Vec3.java b/net/minecraft/world/phys/Vec3.java
+index 545891c23d5d4dcae9d26ef64ec5b0bf08534d01..652435e742e1be43bfa3f3eb47d4e71ff0f4cb65 100644
+--- a/net/minecraft/world/phys/Vec3.java
++++ b/net/minecraft/world/phys/Vec3.java
+@@ -74,6 +74,11 @@ public class Vec3 implements Position {
+     public Vec3(Vec3i vector) {
+         this(vector.getX(), vector.getY(), vector.getZ());
+     }
++    // Papercut
++    public long asBlockPosLong() {
++        return net.minecraft.core.BlockPos.asLong(Mth.floor(x), Mth.floor(y), Mth.floor(z));
++    }
++    // Papercut
+ 
+     public Vec3 vectorTo(Vec3 vec) {
+         return new Vec3(vec.x - this.x, vec.y - this.y, vec.z - this.z);
