@@ -111,6 +111,47 @@ index 9926682586fda91017e3e1ab079296a8c4a88879..befb4d0548ac2afdc7d7f310496aa3b6
          private final Direction.Axis[] axis;
  
          private Plane(final Direction[] faces, final Direction.Axis[] axis) {
+diff --git a/net/minecraft/core/Holder.java b/net/minecraft/core/Holder.java
+index b66cc9ece297190b46234ae167d3d6c76e9d93e8..6a1215a63aec13965a95d356e2c5da94525a662a 100644
+--- a/net/minecraft/core/Holder.java
++++ b/net/minecraft/core/Holder.java
+@@ -29,6 +29,10 @@ public interface Holder<T> {
+ 
+     Stream<TagKey<T>> tags();
+ 
++    // Papercut start
++    java.util.Collection<TagKey<T>> papercut$tags();
++    // Papercut end
++
+     Either<ResourceKey<T>, T> unwrap();
+ 
+     Optional<ResourceKey<T>> unwrapKey();
+@@ -105,6 +109,12 @@ public interface Holder<T> {
+         public Stream<TagKey<T>> tags() {
+             return Stream.of();
+         }
++
++        // Papercut start - performance optimization
++        public java.util.Collection<TagKey<T>> papercut$tags() {
++            return java.util.Collections.emptyList();
++        }
++        // Papercut end
+     }
+ 
+     public static enum Kind {
+@@ -235,6 +245,12 @@ public interface Holder<T> {
+             return this.boundTags().stream();
+         }
+ 
++        // Papercut start - performance optimization
++        public java.util.Collection<TagKey<T>> papercut$tags() {
++            return this.boundTags();
++        }
++        // Papercut end
++
+         @Override
+         public String toString() {
+             return "Reference{" + this.key + "=" + this.value + "}";
 diff --git a/net/minecraft/core/cauldron/CauldronInteraction.java b/net/minecraft/core/cauldron/CauldronInteraction.java
 index c58b4a5426dc2e502e240e9b9270ead2ef65ecbd..2d92f18513d7fe6726d84a8d87b0c366e6cbc2dd 100644
 --- a/net/minecraft/core/cauldron/CauldronInteraction.java
@@ -360,7 +401,7 @@ index f2ec0bd8cca3c08d558790537e17a8a2f95f1953..8576a32550de273a0d135d172d0c497e
      private void scanForMerges() {
          if (this.level() instanceof ServerLevel) {
 diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
-index f6599a577ceb745af957c395bacbf4d097f61010..118bd5a16bc491dc30eddc9a75c6c968dbe622dd 100644
+index f6599a577ceb745af957c395bacbf4d097f61010..127f26e92fa1805844a214fae026d7a378ee9b49 100644
 --- a/net/minecraft/world/entity/LivingEntity.java
 +++ b/net/minecraft/world/entity/LivingEntity.java
 @@ -473,7 +473,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
@@ -393,7 +434,7 @@ index f6599a577ceb745af957c395bacbf4d097f61010..118bd5a16bc491dc30eddc9a75c6c968
              d -= this.getEffectiveGravity();
          } else if (this.getY() > this.level().getMinY()) {
              d = -0.1;
-@@ -4463,14 +4465,15 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -4463,14 +4465,14 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
          if (ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor((ServerLevel)level, blockPos) && level.hasChunkAt(blockPos)) { // Folia - region threading
              boolean flag1 = false;
  
@@ -401,19 +442,18 @@ index f6599a577ceb745af957c395bacbf4d097f61010..118bd5a16bc491dc30eddc9a75c6c968
 -                BlockPos blockPos1 = blockPos.below();
 -                BlockState blockState = level.getBlockState(blockPos1);
 +            // Papercut
-+            while (!flag1 && y2 > level.getMinY()) {
-+                BlockState blockState = chunk.getBlockState(x2, y2 - 1, z2); // Pluto - Decrease chunk/block lookups
++            while (!flag1 && d > level.getMinY()) {
++                BlockState blockState = level.papercut$getBlockState((int)x, (int)d - 1, (int)z);
 +                // Papercut
                  if (blockState.blocksMotion()) {
                      flag1 = true;
                  } else {
                      d--;
 -                    blockPos = blockPos1;
-+                    y2--;
                  }
              }
  
-@@ -4612,8 +4615,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -4612,8 +4614,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
                  Direction direction = blockState.getValue(BedBlock.FACING);
                  this.level().setBlock(blockPos, blockState.setValue(BedBlock.OCCUPIED, false), Block.UPDATE_ALL);
                  Vec3 vec31 = BedBlock.findStandUpPosition(this.getType(), this.level(), blockPos, direction, this.getYRot()).orElseGet(() -> {
@@ -650,7 +690,7 @@ index e3961892ffc05bef4947bda75445ca5e255dce11..7dc2460cd2cdf754bb49600b165b61cd
                  level.getBiome(pos).is(BiomeTags.ALLOWS_TROPICAL_FISH_SPAWNS_AT_ANY_HEIGHT)
                      || WaterAnimal.checkSurfaceWaterAnimalSpawnRules(entityType, level, spawnReason, pos, random)
 diff --git a/net/minecraft/world/entity/animal/fish/WaterAnimal.java b/net/minecraft/world/entity/animal/fish/WaterAnimal.java
-index 3965cb8ae6fdd8d9d0135e6695463e6bef624fe2..7515abfe2c7f93e3b824f5d575ca4aaa5ae2671a 100644
+index 3965cb8ae6fdd8d9d0135e6695463e6bef624fe2..6a0b7ba44ac554d6610983ffb68e505dfa55f7e4 100644
 --- a/net/minecraft/world/entity/animal/fish/WaterAnimal.java
 +++ b/net/minecraft/world/entity/animal/fish/WaterAnimal.java
 @@ -78,7 +78,9 @@ public abstract class WaterAnimal extends PathfinderMob {
@@ -660,8 +700,8 @@ index 3965cb8ae6fdd8d9d0135e6695463e6bef624fe2..7515abfe2c7f93e3b824f5d575ca4aaa
 -            && level.getFluidState(pos.below()).is(FluidTags.WATER)
 -            && level.getBlockState(pos.above()).is(Blocks.WATER);
 +                // Papercut
-+                && level.pluto$getFluidState(pos.getX(), pos.getY() - 1, pos.getZ()).is(FluidTags.WATER)
-+                && level.pluto$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()).is(Blocks.WATER);
++                && level.papercut$getFluidState(pos.getX(), pos.getY() - 1, pos.getZ()).is(FluidTags.WATER)
++                && level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()).is(Blocks.WATER);
 +                // Papercut
      }
  }
