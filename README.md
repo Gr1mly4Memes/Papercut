@@ -46,4 +46,5 @@ Papercut includes patches and features from other projects, and without these pr
 - [Luminol](https://github.com/LuminolMC/Luminol)
 - [Folia](https://github.com/PaperMC/Folia)
 - [Pluto](https://github.com/Yive/Pluto)
+- [Canva](https://github.com/CraftCanvasMC/Canvas)
 
