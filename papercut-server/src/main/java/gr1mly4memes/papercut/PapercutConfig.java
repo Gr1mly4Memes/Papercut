@@ -24,7 +24,7 @@ public final class PapercutConfig {
             "",
             "Created by Gr1mly4Memes"
     );
-    public static final int CURRENT_CONFIG_VERSION = 6;
+    public static final int CURRENT_CONFIG_VERSION = 2;
 
     private static File configFile;
     public static YamlConfiguration config;
@@ -83,6 +83,11 @@ public final class PapercutConfig {
         MinecraftServer.getServer().server.getCommandMap().getKnownCommands().remove("papercut:" + name);
         MinecraftServer.getServer().server.syncCommands();
     }
+
+    // Papercut start - features
+    @GlobalConfig(name = "use-compact-bit-storage",category = {"features"})
+    public static boolean useCompactBitStorage = false;
+    // Papercut end - features
 
     // Papercut start - region
     @GlobalConfig(name = "format", category = "region", lock = true, verify = RegionFormatVerify.class)

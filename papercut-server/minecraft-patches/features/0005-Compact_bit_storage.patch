@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sat, 28 Feb 2026 20:06:42 -0800
+Subject: [PATCH] Compact_bit_storage
+
+
+diff --git a/net/minecraft/world/level/chunk/PalettedContainer.java b/net/minecraft/world/level/chunk/PalettedContainer.java
+index 7c8f8772a6fba04dbafdb5dbf8098b6ebce6d6f2..8f0ed7c7b547fa58b2adac47561f8cb8ad06ca93 100644
+--- a/net/minecraft/world/level/chunk/PalettedContainer.java
++++ b/net/minecraft/world/level/chunk/PalettedContainer.java
+@@ -264,6 +264,28 @@ public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainer
+             data.palette.read(buffer, this.strategy.globalMap());
+             buffer.readFixedSizeLongArray(data.storage.getRaw());
+             this.data = data;
++            // Papercut start - ModernFix: compact_bit_storage
++            if (gr1mly4memes.papercut.PapercutConfig.useCompactBitStorage && _byte > 1) {
++                long[] storageArray = this.data.storage.getRaw();
++                boolean empty = true;
++                for (long l : storageArray) {
++                    if (l != 0) {
++                        empty = false;
++                        break;
++                    }
++                }
++                if (empty && storageArray.length > 0) {
++                    T value;
++                    try {
++                        value = this.data.palette.valueFor(0);
++                    } catch (RuntimeException e) {
++                        return;
++                    }
++                    this.data = this.createOrReuseData(null, 0);
++                    this.data.palette.idFor(value, this);
++                }
++            }
++            // Papercut end
+             this.addPresetValues(); // Paper - Anti-Xray - Add preset values (inefficient, but this isn't used by the server)
+             this.updateData(this.data); // Paper - optimise palette reads
+         } finally {
