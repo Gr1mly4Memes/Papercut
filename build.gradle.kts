@@ -64,6 +64,7 @@ subprojects {
         options.encoding = Charsets.UTF_8.name()
         options.release = 21
         options.isFork = true
+        options.compilerArgs.addAll(listOf("-Xlint:-deprecation", "-Xlint:-removal"))
     }
     tasks.withType<Javadoc>().configureEach {
         options.encoding = Charsets.UTF_8.name()
@@ -78,13 +79,9 @@ subprojects {
             events(TestLogEvent.STANDARD_OUT)
         }
     }
-
-    tasks.withType<Javadoc>().configureEach {
-        options {
-            (this as StandardJavadocDocletOptions).apply {
-                addStringOption("-add-modules", "jdk.incubator.vector")
-                addStringOption("Xdoclint:none", "-quiet")
-            }
-        }
+    repositories {
+        mavenCentral()
+        maven(paperMavenPublicUrl)
+        maven("https://jitpack.io")
     }
 }

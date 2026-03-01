@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sun, 1 Mar 2026 15:02:37 -0800
+Subject: [PATCH] Pufferfish Only check for spooky season once an hour
+
+
+diff --git a/net/minecraft/world/entity/ambient/Bat.java b/net/minecraft/world/entity/ambient/Bat.java
+index ca68d356e892e0ac8a651ced92aab7dbfd4699b4..2ebe7071fb05d11a0a876dd4ec9aa87f328ad68e 100644
+--- a/net/minecraft/world/entity/ambient/Bat.java
++++ b/net/minecraft/world/entity/ambient/Bat.java
+@@ -1,5 +1,7 @@
+ package net.minecraft.world.entity.ambient;
+ 
++import java.time.LocalDate;
++import java.time.temporal.ChronoField;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.network.syncher.EntityDataAccessor;
+ import net.minecraft.network.syncher.EntityDataSerializers;
+@@ -232,6 +234,23 @@ public class Bat extends AmbientCreature {
+             && checkMobSpawnRules(entityType, level, spawnReason, pos, randomSource);
+     }
+ 
++    // Pufferfish start - only check for spooky season once an hour // Papercut modded
++    private static boolean isSpookySeason = false;
++    private static final long ONE_HOUR_NANOS = 3_600_000_000_000L; // 1 hour in nanoseconds
++    private static long lastSpookyCheck = -ONE_HOUR_NANOS;
++    private static boolean isHalloween() {
++        long currentTime = System.nanoTime();
++        if (currentTime - lastSpookyCheck > ONE_HOUR_NANOS) {
++            LocalDate localDate = LocalDate.now();
++            int i = localDate.get(ChronoField.DAY_OF_MONTH);
++            int i1 = localDate.get(ChronoField.MONTH_OF_YEAR);
++            isSpookySeason = i1 == 10 && i >= 20 || i1 == 11 && i <= 3;
++            lastSpookyCheck = currentTime;
++        }
++        return isSpookySeason;
++    }
++    // Pufferfish end
++
+     private void setupAnimationStates() {
+         if (this.isResting()) {
+             this.flyAnimationState.stop();

@@ -47,4 +47,5 @@ Papercut includes patches and features from other projects, and without these pr
 - [Folia](https://github.com/PaperMC/Folia)
 - [Pluto](https://github.com/Yive/Pluto)
 - [Canva](https://github.com/CraftCanvasMC/Canvas)
+- [Pufferfish](https://github.com/pufferfish-gg/Pufferfish)
 

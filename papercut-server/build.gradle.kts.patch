@@ -81,17 +81,30 @@
      implementation("org.ow2.asm:asm-commons:9.8")
      implementation("org.spongepowered:configurate-yaml:4.2.0")
  
-@@ -209,6 +_,13 @@
+@@ -185,6 +_,13 @@
+     implementation("com.googlecode.json-simple:json-simple:1.1.1") { // change to runtimeOnly once Timings is removed
+         isTransitive = false // includes junit
+     }
++    // Pufferfish start - config
++    implementation("org.yaml:snakeyaml:1.32")
++    implementation ("me.carleslc.Simple-YAML:Simple-Yaml:1.8.4") {
++        exclude(group="org.yaml", module="snakeyaml")
++    }
++    // Pufferfish end
++    implementation("com.github.technove:Flare:34637f3f87") // Pufferfish - flare
+ 
+     testImplementation("io.github.classgraph:classgraph:4.8.179") // For mob goal test
+     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+@@ -209,6 +_,12 @@
      implementation("me.lucko:spark-api:0.1-20240720.200737-2")
      implementation("me.lucko:spark-paper:1.10.152")
  }
++// Pufferfish Start - SIMD Optimizations
 +tasks.withType<JavaCompile> {
 +    val compilerArgs = options.compilerArgs
-+    compilerArgs.add("-Xlint:-module")
-+    compilerArgs.add("-Xlint:-removal")
-+    compilerArgs.add("-Xlint:-dep-ann")
 +    compilerArgs.add("--add-modules=jdk.incubator.vector")
 +}
++// Pufferfish End
  
  tasks.jar {
      manifest {

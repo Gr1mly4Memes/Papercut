@@ -1,0 +1,47 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sun, 1 Mar 2026 14:59:04 -0800
+Subject: [PATCH] Pufferfish Reduce projectile-chunk loading
+
+
+diff --git a/net/minecraft/world/entity/projectile/Projectile.java b/net/minecraft/world/entity/projectile/Projectile.java
+index da218b6f84f8501eec8086abf2b61d8552741fc9..1726fe4b228f234b6a54f54f58b4f533576187eb 100644
+--- a/net/minecraft/world/entity/projectile/Projectile.java
++++ b/net/minecraft/world/entity/projectile/Projectile.java
+@@ -50,6 +50,36 @@ public abstract class Projectile extends Entity implements TraceableEntity {
+         super(type, level);
+     }
+ 
++    // Pufferfish start // Papercut modded
++    private static int loadedThisTick = 0;
++    private static long lastTickTime = 0;
++    private static final long TICK_DURATION_NANOS = 50_000_000L; // 50ms = 20 ticks per second
++    private int loadedLifetime = 0;
++    @Override
++    public void setPos(double x, double y, double z) {
++        long currentTime = System.nanoTime();
++        if (lastTickTime == 0 || currentTime - lastTickTime > TICK_DURATION_NANOS) {
++            lastTickTime = currentTime;
++            loadedThisTick = 0;
++        }
++        int previousX = Mth.floor(this.getX()) >> 4, previousZ = Mth.floor(this.getZ()) >> 4;
++        int newX = Mth.floor(x) >> 4, newZ = Mth.floor(z) >> 4;
++        if (previousX != newX || previousZ != newZ) {
++            boolean isLoaded = ((net.minecraft.server.level.ServerChunkCache) this.level().getChunkSource()).getChunkAtIfLoadedImmediately(newX, newZ) != null;
++            if (!isLoaded) {
++                if (Projectile.loadedThisTick > gg.pufferfish.pufferfish.PufferfishConfig.maxProjectileLoadsPerTick) {
++                    if (++this.loadedLifetime > gg.pufferfish.pufferfish.PufferfishConfig.maxProjectileLoadsPerProjectile) {
++                        this.discard();
++                    }
++                    return;
++                }
++                Projectile.loadedThisTick++;
++            }
++        }
++        super.setPos(x, y, z);
++    }
++    // Pufferfish end
++
+     protected void setOwner(@Nullable EntityReference<Entity> owner) {
+         this.owner = owner;
+         this.refreshProjectileSource(false); // Paper

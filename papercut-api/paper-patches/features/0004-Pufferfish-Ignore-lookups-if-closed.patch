@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sun, 1 Mar 2026 14:23:17 -0800
+Subject: [PATCH] Pufferfish Ignore lookups if closed
+
+
+diff --git a/src/main/java/org/bukkit/plugin/java/PluginClassLoader.java b/src/main/java/org/bukkit/plugin/java/PluginClassLoader.java
+index 96ef6374a08a621618450345e96b7c738a053b1e..eab0576d6f40a0e7971244eeec4eb28a77ef5efa 100644
+--- a/src/main/java/org/bukkit/plugin/java/PluginClassLoader.java
++++ b/src/main/java/org/bukkit/plugin/java/PluginClassLoader.java
+@@ -51,6 +51,8 @@ public final class PluginClassLoader extends URLClassLoader implements io.paperm
+     private io.papermc.paper.plugin.provider.classloader.PluginClassLoaderGroup classLoaderGroup; // Paper
+     public io.papermc.paper.plugin.provider.entrypoint.DependencyContext dependencyContext; // Paper
+ 
++    private boolean closed = false; // Pufferfish
++
+     static {
+         ClassLoader.registerAsParallelCapable();
+     }
+@@ -215,7 +217,7 @@ public final class PluginClassLoader extends URLClassLoader implements io.paperm
+         }
+         Class<?> result = classes.get(name);
+ 
+-        if (result == null) {
++        if (result == null && !this.closed) { // Pufferfish
+             String path = name.replace('.', '/').concat(".class");
+             // Add details to zip file errors - help debug classloading
+             JarEntry entry;
+@@ -270,7 +272,7 @@ public final class PluginClassLoader extends URLClassLoader implements io.paperm
+             classes.put(name, result);
+             this.setClass(name, result); // Paper
+         }
+-
++        if (result == null) throw new ClassNotFoundException(name); // Pufferfish
+         return result;
+     }
+ 
+@@ -285,6 +287,7 @@ public final class PluginClassLoader extends URLClassLoader implements io.paperm
+             // Paper end
+             super.close();
+         } finally {
++            this.closed = true; // Pufferfish
+             jar.close();
+         }
+     }
