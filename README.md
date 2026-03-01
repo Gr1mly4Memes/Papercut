@@ -43,7 +43,7 @@ Most well-written plugins that follow best practices will work seamlessly on Pap
 ## 📜 Credits
 Papercut includes patches and features from other projects, and without these projects, Papercut wouldn't exist today. Here is the list of projects that Papercut takes patches from:
 
-- [Horizon](https://github.com/GideonWhite1029/Horizon)
+- [Luminol](https://github.com/LuminolMC/Luminol)
 - [Folia](https://github.com/PaperMC/Folia)
 - [Pluto](https://github.com/Yive/Pluto)
 
