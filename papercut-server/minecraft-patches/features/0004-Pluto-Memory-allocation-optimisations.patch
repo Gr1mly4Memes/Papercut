@@ -2013,6 +2013,1154 @@ index dfb9a10622ba2a0c2759bb563fefd729f1109865..f83ffaebf743956c8099a328e5f09edb
              if (!blockState.is(BlockTags.PALE_OAK_LOGS)) {
                  return false;
              }
+diff --git a/net/minecraft/world/level/block/CropBlock.java b/net/minecraft/world/level/block/CropBlock.java
+index 1cf40fafd822d976ef4822335c60d8017659916f..d04ae2b14eb88a6d61d6f3fc65b62522535789a4 100644
+--- a/net/minecraft/world/level/block/CropBlock.java
++++ b/net/minecraft/world/level/block/CropBlock.java
+@@ -115,12 +115,17 @@ public class CropBlock extends VegetationBlock implements BonemealableBlock {
+ 
+     protected static float getGrowthSpeed(Block block, BlockGetter level, BlockPos pos) {
+         float f = 1.0F;
+-        BlockPos blockPos = pos.below();
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int yBelow = y - 1;
++        final int z = pos.getZ();
++        // Papercut
+ 
+         for (int i = -1; i <= 1; i++) {
+             for (int i1 = -1; i1 <= 1; i1++) {
+                 float f1 = 0.0F;
+-                BlockState blockState = level.getBlockState(blockPos.offset(i, 0, i1));
++                BlockState blockState = level.papercut$getBlockState(x + i, yBelow, z + i1); // Papercut
+                 if (blockState.is(Blocks.FARMLAND)) {
+                     f1 = 1.0F;
+                     if (blockState.getValue(FarmBlock.MOISTURE) > 0) {
+@@ -136,19 +141,23 @@ public class CropBlock extends VegetationBlock implements BonemealableBlock {
+             }
+         }
+ 
+-        BlockPos blockPos1 = pos.north();
+-        BlockPos blockPos2 = pos.south();
+-        BlockPos blockPos3 = pos.west();
+-        BlockPos blockPos4 = pos.east();
+-        boolean flag = level.getBlockState(blockPos3).is(block) || level.getBlockState(blockPos4).is(block);
+-        boolean flag1 = level.getBlockState(blockPos1).is(block) || level.getBlockState(blockPos2).is(block);
++        // Papercut
++        final int zNorth = z - 1;
++        final int zSouth = z + 1;
++        final int xWest = x - 1;
++        final int xEast = x + 1;
++        boolean flag = level.papercut$getBlockState(xWest, y, z).is(block) || level.papercut$getBlockState(xEast, y, z).is(block);
++        boolean flag1 = level.papercut$getBlockState(x, y, zNorth).is(block) || level.papercut$getBlockState(x, y, zSouth).is(block);
++        // Papercut
+         if (flag && flag1) {
+             f /= 2.0F;
+         } else {
+-            boolean flag2 = level.getBlockState(blockPos3.north()).is(block)
+-                || level.getBlockState(blockPos4.north()).is(block)
+-                || level.getBlockState(blockPos4.south()).is(block)
+-                || level.getBlockState(blockPos3.south()).is(block);
++            // Papercut
++            boolean flag2 = level.papercut$getBlockState(xWest, y, z - 1).is(block)
++                    || level.papercut$getBlockState(xEast, y, z - 1).is(block)
++                    || level.papercut$getBlockState(xEast, y, z + 1).is(block)
++                    || level.papercut$getBlockState(xWest, y, z + 1).is(block);
++            // Papercut
+             if (flag2) {
+                 f /= 2.0F;
+             }
+diff --git a/net/minecraft/world/level/block/DaylightDetectorBlock.java b/net/minecraft/world/level/block/DaylightDetectorBlock.java
+index 6ad7da0e7a86742219ea13ec5cef33d9eaaabac9..66c8a355f704758a08fa2b1d7948d13feec87842 100644
+--- a/net/minecraft/world/level/block/DaylightDetectorBlock.java
++++ b/net/minecraft/world/level/block/DaylightDetectorBlock.java
+@@ -56,6 +56,12 @@ public class DaylightDetectorBlock extends BaseEntityBlock {
+     protected int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+         return state.getValue(POWER);
+     }
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction direction) {
++        return blockState.getValue(POWER);
++    }
++    // Papercut
+ 
+     private static void updateSignalStrength(BlockState state, Level level, BlockPos pos) {
+         int i = level.getBrightness(LightLayer.SKY, pos) - level.getSkyDarken();
+diff --git a/net/minecraft/world/level/block/DetectorRailBlock.java b/net/minecraft/world/level/block/DetectorRailBlock.java
+index 62b79ef88083d2672c49c1d273a6f6e523e7ce43..e47db3a9c5b524780fe39a3088899ebca09c8c54 100644
+--- a/net/minecraft/world/level/block/DetectorRailBlock.java
++++ b/net/minecraft/world/level/block/DetectorRailBlock.java
+@@ -78,6 +78,21 @@ public class DetectorRailBlock extends BaseRailBlock {
+         }
+     }
+ 
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction direction) {
++        return blockState.getValue(POWERED) ? 15 : 0;
++    }
++    @Override
++    protected int papercut$getDirectSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction side) {
++        if (!blockState.getValue(POWERED)) {
++            return 0;
++        } else {
++            return side == Direction.UP ? 15 : 0;
++        }
++    }
++    // Papercut
++
+     private void checkPressed(Level level, BlockPos pos, BlockState state) {
+         if (this.canSurvive(state, level, pos)) {
+             if (!state.is(this)) { return; } // Paper - Fix some rails connecting improperly
+diff --git a/net/minecraft/world/level/block/DiodeBlock.java b/net/minecraft/world/level/block/DiodeBlock.java
+index 02ffb5569e2405d86b3a4a695dd17c9372169ff7..a4b165ee8b7fde39e5c8f7de753ee43c5562aee5 100644
+--- a/net/minecraft/world/level/block/DiodeBlock.java
++++ b/net/minecraft/world/level/block/DiodeBlock.java
+@@ -81,6 +81,24 @@ public abstract class DiodeBlock extends HorizontalDirectionalBlock {
+         return state.getSignal(level, pos, side);
+     }
+ 
++    // Papercut
++    @Override
++    protected int papercut$getDirectSignal(BlockState blockState, BlockGetter blockAccess, int x, int y, int z, Direction side) {
++        return blockState.papercut$getSignal(blockAccess, x, y, z, side);
++    }
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter blockAccess, int x, int y, int z, Direction side) {
++        if (!blockState.getValue(POWERED)) {
++            return 0;
++        } else {
++            return blockState.getValue(FACING) == side ? this.papercut$getOutputSignal(blockAccess, x, y, z, blockState) : 0;
++        }
++    }
++    protected int papercut$getOutputSignal(BlockGetter level, int x, int y, int z, BlockState state) {
++        return 15;
++    }
++    // Papercut
++
+     @Override
+     protected int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+         if (!state.getValue(POWERED)) {
+@@ -99,7 +117,7 @@ public abstract class DiodeBlock extends HorizontalDirectionalBlock {
+             dropResources(state, level, pos, blockEntity);
+             level.removeBlock(pos, false);
+ 
+-            for (Direction direction : Direction.values()) {
++            for (Direction direction : Direction.VALUES) {
+                 level.updateNeighborsAt(pos.relative(direction), this);
+             }
+         }
+@@ -148,8 +166,10 @@ public abstract class DiodeBlock extends HorizontalDirectionalBlock {
+         Direction counterClockWise = direction.getCounterClockWise();
+         boolean flag = this.sideInputDiodesOnly();
+         return Math.max(
+-            level.getControlInputSignal(pos.relative(clockWise), clockWise, flag),
+-            level.getControlInputSignal(pos.relative(counterClockWise), counterClockWise, flag)
++                // Papercut
++                level.papercut$getControlInputSignal(pos.getX() + clockWise.getStepX(), pos.getY() + clockWise.getStepY(), pos.getZ() + clockWise.getStepZ(), clockWise, flag),
++                level.papercut$getControlInputSignal(pos.getX() + counterClockWise.getStepX(), pos.getY() + counterClockWise.getStepY(), pos.getZ() + counterClockWise.getStepZ(), counterClockWise, flag)
++                // Papercut
+         );
+     }
+ 
+@@ -204,7 +224,7 @@ public abstract class DiodeBlock extends HorizontalDirectionalBlock {
+ 
+     public boolean shouldPrioritize(BlockGetter level, BlockPos pos, BlockState state) {
+         Direction opposite = state.getValue(FACING).getOpposite();
+-        BlockState blockState = level.getBlockState(pos.relative(opposite));
++        BlockState blockState = level.papercut$getBlockState(pos.getX() + opposite.getStepX(), pos.getY() + opposite.getStepY(), pos.getZ() + opposite.getStepZ()); // Papercut
+         return isDiode(blockState) && blockState.getValue(FACING) != opposite;
+     }
+ 
+diff --git a/net/minecraft/world/level/block/DirtPathBlock.java b/net/minecraft/world/level/block/DirtPathBlock.java
+index ed0aac42a17ed659f349f0888738b9feb10c6b51..60015208a763d08cef1ee205dcd209c8b0c7dbf3 100644
+--- a/net/minecraft/world/level/block/DirtPathBlock.java
++++ b/net/minecraft/world/level/block/DirtPathBlock.java
+@@ -70,7 +70,7 @@ public class DirtPathBlock extends Block {
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        BlockState blockState = level.getBlockState(pos.above());
++        BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()); // Papercut
+         return !blockState.isSolid() || blockState.getBlock() instanceof FenceGateBlock;
+     }
+ 
+diff --git a/net/minecraft/world/level/block/DoublePlantBlock.java b/net/minecraft/world/level/block/DoublePlantBlock.java
+index beaef78ace07ebf641bd873232b4be7e2c417d80..df71e4b0352c7525507ca6f142bd48253d632d90 100644
+--- a/net/minecraft/world/level/block/DoublePlantBlock.java
++++ b/net/minecraft/world/level/block/DoublePlantBlock.java
+@@ -64,7 +64,7 @@ public class DoublePlantBlock extends VegetationBlock {
+     public @Nullable BlockState getStateForPlacement(BlockPlaceContext context) {
+         BlockPos clickedPos = context.getClickedPos();
+         Level level = context.getLevel();
+-        return clickedPos.getY() < level.getMaxY() && level.getBlockState(clickedPos.above()).canBeReplaced(context)
++        return clickedPos.getY() < level.getMaxY() && level.papercut$getBlockState(clickedPos.getX(), clickedPos.getY() + 1, clickedPos.getZ()).canBeReplaced(context) // Papercut
+             ? super.getStateForPlacement(context)
+             : null;
+     }
+@@ -80,7 +80,7 @@ public class DoublePlantBlock extends VegetationBlock {
+         if (state.getValue(HALF) != DoubleBlockHalf.UPPER) {
+             return super.canSurvive(state, level, pos);
+         } else {
+-            BlockState blockState = level.getBlockState(pos.below());
++            BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()); // Papercut
+             return blockState.is(this) && blockState.getValue(HALF) == DoubleBlockHalf.LOWER;
+         }
+     }
+@@ -121,10 +121,10 @@ public class DoublePlantBlock extends VegetationBlock {
+         // CraftBukkit end
+         DoubleBlockHalf doubleBlockHalf = state.getValue(HALF);
+         if (doubleBlockHalf == DoubleBlockHalf.UPPER) {
+-            BlockPos blockPos = pos.below();
+-            BlockState blockState = level.getBlockState(blockPos);
++            BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()); // Papercut
+             if (blockState.is(state.getBlock()) && blockState.getValue(HALF) == DoubleBlockHalf.LOWER) {
+                 BlockState blockState1 = blockState.getFluidState().is(Fluids.WATER) ? Blocks.WATER.defaultBlockState() : Blocks.AIR.defaultBlockState();
++                BlockPos blockPos = pos.below(); // Papercut
+                 level.setBlock(blockPos, blockState1, Block.UPDATE_ALL | Block.UPDATE_SUPPRESS_DROPS);
+                 level.levelEvent(player, LevelEvent.PARTICLES_DESTROY_BLOCK, blockPos, Block.getId(blockState));
+             }
+diff --git a/net/minecraft/world/level/block/FallingBlock.java b/net/minecraft/world/level/block/FallingBlock.java
+index 24b9ce38bc144febeefc2304242e96243533a01c..cab155f507471a92648f2352d55c9543a844a763 100644
+--- a/net/minecraft/world/level/block/FallingBlock.java
++++ b/net/minecraft/world/level/block/FallingBlock.java
+@@ -47,7 +47,7 @@ public abstract class FallingBlock extends Block implements Fallable {
+ 
+     @Override
+     protected void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
+-        if (isFree(level.getBlockState(pos.below())) && pos.getY() >= level.getMinY()) {
++        if (isFree(level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ())) && pos.getY() >= level.getMinY()) { // Papercut
+             FallingBlockEntity fallingBlockEntity = FallingBlockEntity.fall(level, pos, state);
+             this.falling(fallingBlockEntity);
+         }
+diff --git a/net/minecraft/world/level/block/FarmBlock.java b/net/minecraft/world/level/block/FarmBlock.java
+index eb21b20a72062fc53b8f94aa98dcd380c8ad4db3..007d356ed0ab4d0a10cd732937c93278be01b81f 100644
+--- a/net/minecraft/world/level/block/FarmBlock.java
++++ b/net/minecraft/world/level/block/FarmBlock.java
+@@ -64,7 +64,7 @@ public class FarmBlock extends Block {
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        BlockState blockState = level.getBlockState(pos.above());
++        BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()); // Papercut
+         return !blockState.isSolid() || blockState.getBlock() instanceof FenceGateBlock || blockState.getBlock() instanceof MovingPistonBlock;
+     }
+ 
+@@ -154,7 +154,7 @@ public class FarmBlock extends Block {
+     }
+ 
+     private static boolean shouldMaintainFarmland(BlockGetter level, BlockPos pos) {
+-        return level.getBlockState(pos.above()).is(BlockTags.MAINTAINS_FARMLAND);
++        return level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()).is(BlockTags.MAINTAINS_FARMLAND); // Papercut
+     }
+ 
+     private static boolean isNearWater(LevelReader level, BlockPos pos) {
+diff --git a/net/minecraft/world/level/block/FireBlock.java b/net/minecraft/world/level/block/FireBlock.java
+index 14a4189166b862b66a8383046f2abfe02ccbccd8..b383fc67cb7e2bbd251924e1798080d210d6faec 100644
+--- a/net/minecraft/world/level/block/FireBlock.java
++++ b/net/minecraft/world/level/block/FireBlock.java
+@@ -131,15 +131,19 @@ public class FireBlock extends BaseFireBlock {
+     }
+ 
+     protected BlockState getStateForPlacement(BlockGetter level, BlockPos pos) {
+-        BlockPos blockPos = pos.below();
+-        BlockState blockState = level.getBlockState(blockPos);
+-        if (!this.canBurn(blockState) && !blockState.isFaceSturdy(level, blockPos, Direction.UP)) {
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        BlockState blockState = level.papercut$getBlockState(x, y - 1, z);
++        if (!this.canBurn(blockState) && !blockState.isFaceSturdy(level, pos.below(), Direction.UP)) {
++            // Papercut
+             BlockState blockState1 = this.defaultBlockState();
+ 
+-            for (Direction direction : Direction.values()) {
++            for (Direction direction : Direction.VALUES) {
+                 BooleanProperty booleanProperty = PROPERTY_BY_DIRECTION.get(direction);
+                 if (booleanProperty != null) {
+-                    blockState1 = blockState1.setValue(booleanProperty, this.canBurn(level.getBlockState(pos.relative(direction))));
++                    blockState1 = blockState1.setValue(booleanProperty, this.canBurn(level.papercut$getBlockState(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ()))); // Papercut
+                 }
+             }
+ 
+@@ -306,8 +310,13 @@ public class FireBlock extends BaseFireBlock {
+     }
+ 
+     private boolean isValidFireLocation(BlockGetter level, BlockPos pos) {
+-        for (Direction direction : Direction.values()) {
+-            if (this.canBurn(level.getBlockState(pos.relative(direction)))) {
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        for (Direction direction : Direction.VALUES) {
++            if (this.canBurn(level.papercut$getBlockState(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ()))) {
++                // Papercut
+                 return true;
+             }
+         }
+@@ -321,8 +330,13 @@ public class FireBlock extends BaseFireBlock {
+         } else {
+             int i = 0;
+ 
+-            for (Direction direction : Direction.values()) {
+-                BlockState blockState = level.getBlockState(pos.relative(direction));
++            // Papercut
++            final int x = pos.getX();
++            final int y = pos.getY();
++            final int z = pos.getZ();
++            for (Direction direction : Direction.VALUES) {
++                BlockState blockState = level.papercut$getBlockState(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ());
++                // Papercut
+                 i = Math.max(this.getIgniteOdds(blockState), i);
+             }
+ 
+diff --git a/net/minecraft/world/level/block/FrostedIceBlock.java b/net/minecraft/world/level/block/FrostedIceBlock.java
+index 4d62fa1c74ee3b810f02f23cc18ee4e887e93910..1c47b025d8474b5441c8b9346f1c845c77e701f2 100644
+--- a/net/minecraft/world/level/block/FrostedIceBlock.java
++++ b/net/minecraft/world/level/block/FrostedIceBlock.java
+@@ -49,7 +49,7 @@ public class FrostedIceBlock extends IceBlock {
+             if (i > 11 - state.getValue(AGE) - state.getLightBlock() && this.slightlyMelt(state, level, pos)) {
+                 BlockPos.MutableBlockPos mutableBlockPos = new BlockPos.MutableBlockPos();
+ 
+-                for (Direction direction : Direction.values()) {
++                for (Direction direction : Direction.VALUES) {
+                     mutableBlockPos.setWithOffset(pos, direction);
+                     BlockState blockState = level.getBlockState(mutableBlockPos);
+                     if (blockState.is(this) && !this.slightlyMelt(blockState, level, mutableBlockPos)) {
+@@ -86,11 +86,14 @@ public class FrostedIceBlock extends IceBlock {
+ 
+     private boolean fewerNeigboursThan(BlockGetter level, BlockPos pos, int neighborsRequired) {
+         int i = 0;
+-        BlockPos.MutableBlockPos mutableBlockPos = new BlockPos.MutableBlockPos();
+-
+-        for (Direction direction : Direction.values()) {
+-            mutableBlockPos.setWithOffset(pos, direction);
+-            if (level.getBlockState(mutableBlockPos).is(this)) {
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++
++        for (Direction direction : Direction.VALUES) {
++            if (level.papercut$getBlockState(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ()).is(this)) {
++                // papercut
+                 if (++i >= neighborsRequired) {
+                     return false;
+                 }
+diff --git a/net/minecraft/world/level/block/FungusBlock.java b/net/minecraft/world/level/block/FungusBlock.java
+index 98714fac58961d21636001bf422bae09223d14da..314b816ae2eb4880d5dafcd9d3b9e2af1116b678 100644
+--- a/net/minecraft/world/level/block/FungusBlock.java
++++ b/net/minecraft/world/level/block/FungusBlock.java
+@@ -61,7 +61,7 @@ public class FungusBlock extends VegetationBlock implements BonemealableBlock {
+ 
+     @Override
+     public boolean isValidBonemealTarget(LevelReader level, BlockPos pos, BlockState state) {
+-        BlockState blockState = level.getBlockState(pos.below());
++        BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()); // Papercut
+         return blockState.is(this.requiredBlock);
+     }
+ 
+diff --git a/net/minecraft/world/level/block/JukeboxBlock.java b/net/minecraft/world/level/block/JukeboxBlock.java
+index a4b824dab307705559a76b954a3e47d30dd65889..69bf1cc06997b85a773a56cf843c665407ef2945 100644
+--- a/net/minecraft/world/level/block/JukeboxBlock.java
++++ b/net/minecraft/world/level/block/JukeboxBlock.java
+@@ -92,6 +92,12 @@ public class JukeboxBlock extends BaseEntityBlock {
+     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
+         return level.getBlockEntity(pos) instanceof JukeboxBlockEntity jukeboxBlockEntity && jukeboxBlockEntity.getSongPlayer().isPlaying() ? 15 : 0;
+     }
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState state, BlockGetter level, int x, int y, int z, Direction direction) {
++        return level.getBlockEntity(new BlockPos(x, y, z)) instanceof JukeboxBlockEntity jukeboxBlockEntity && jukeboxBlockEntity.getSongPlayer().isPlaying() ? 15 : 0;
++    }
++    // Papercut
+ 
+     @Override
+     protected boolean hasAnalogOutputSignal(BlockState state) {
+diff --git a/net/minecraft/world/level/block/LeavesBlock.java b/net/minecraft/world/level/block/LeavesBlock.java
+index d5b114dca7b28d910f03ae3468e891d5d9863897..bc31f5381e98f7cb26d7bc3558fc40efe0f83d9f 100644
+--- a/net/minecraft/world/level/block/LeavesBlock.java
++++ b/net/minecraft/world/level/block/LeavesBlock.java
+@@ -118,11 +118,14 @@ public abstract class LeavesBlock extends Block implements SimpleWaterloggedBloc
+ 
+     private static BlockState updateDistance(BlockState state, LevelAccessor level, BlockPos pos) {
+         int i = 7;
+-        BlockPos.MutableBlockPos mutableBlockPos = new BlockPos.MutableBlockPos();
+-
+-        for (Direction direction : Direction.values()) {
+-            mutableBlockPos.setWithOffset(pos, direction);
+-            i = Math.min(i, getDistanceAt(level.getBlockState(mutableBlockPos)) + 1);
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++
++        for (Direction direction : Direction.VALUES) {
++            i = Math.min(i, getDistanceAt(level.papercut$getBlockState(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ())) + 1);
++            // Papercut
+             if (i == 1) {
+                 break;
+             }
+diff --git a/net/minecraft/world/level/block/LecternBlock.java b/net/minecraft/world/level/block/LecternBlock.java
+index 52b9bd310c731c407fc4264559084debec81d3d9..93f2950cb190af9be48bf3b07498e3c74da767fe 100644
+--- a/net/minecraft/world/level/block/LecternBlock.java
++++ b/net/minecraft/world/level/block/LecternBlock.java
+@@ -220,6 +220,17 @@ public class LecternBlock extends BaseEntityBlock {
+         return side == Direction.UP && state.getValue(POWERED) ? 15 : 0;
+     }
+ 
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction direction) {
++        return blockState.getValue(POWERED) ? 15 : 0;
++    }
++    @Override
++    protected int papercut$getDirectSignal(BlockState blockState, BlockGetter blockAccess, int x, int y, int z, Direction side) {
++        return side == Direction.UP && blockState.getValue(POWERED) ? 15 : 0;
++    }
++    // Papercut
++
+     @Override
+     protected boolean hasAnalogOutputSignal(BlockState state) {
+         return true;
+diff --git a/net/minecraft/world/level/block/LeverBlock.java b/net/minecraft/world/level/block/LeverBlock.java
+index 5f03e9fed3d4a8c3b72ca05be0b62ef45ac291f7..bbcdfd38ceeb0c1b170c2151ea60526dc5e225f6 100644
+--- a/net/minecraft/world/level/block/LeverBlock.java
++++ b/net/minecraft/world/level/block/LeverBlock.java
+@@ -141,6 +141,17 @@ public class LeverBlock extends FaceAttachedHorizontalDirectionalBlock {
+         return state.getValue(POWERED) && getConnectedDirection(state) == side ? 15 : 0;
+     }
+ 
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction direction) {
++        return blockState.getValue(POWERED) ? 15 : 0;
++    }
++    @Override
++    protected int papercut$getDirectSignal(BlockState blockState, BlockGetter blockAccess, int x, int y, int z, Direction side) {
++        return blockState.getValue(POWERED) && getConnectedDirection(blockState) == side ? 15 : 0;
++    }
++    // Papercut
++
+     @Override
+     protected boolean isSignalSource(BlockState state) {
+         return true;
+diff --git a/net/minecraft/world/level/block/LightningRodBlock.java b/net/minecraft/world/level/block/LightningRodBlock.java
+index dbfe086123c4b3cdc866111e1b6ec37d8d38d394..bdf587d275a0c680b1fbb5bda984de3c2a6f6e53 100644
+--- a/net/minecraft/world/level/block/LightningRodBlock.java
++++ b/net/minecraft/world/level/block/LightningRodBlock.java
+@@ -81,6 +81,17 @@ public class LightningRodBlock extends RodBlock implements SimpleWaterloggedBloc
+         return state.getValue(POWERED) && state.getValue(FACING) == direction ? 15 : 0;
+     }
+ 
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState state, BlockGetter level, int x, int y, int z, Direction direction) {
++        return state.getValue(POWERED) ? 15 : 0;
++    }
++    @Override
++    protected int papercut$getDirectSignal(BlockState state, BlockGetter level, int x, int y, int z, Direction direction) {
++        return state.getValue(POWERED) && state.getValue(FACING) == direction ? 15 : 0;
++    }
++    // Papercut
++
+     public void onLightningStrike(BlockState state, Level level, BlockPos pos) {
+         // CraftBukkit start
+         boolean powered = state.getValue(LightningRodBlock.POWERED);
+diff --git a/net/minecraft/world/level/block/MangrovePropaguleBlock.java b/net/minecraft/world/level/block/MangrovePropaguleBlock.java
+index 2fba8534a636491314c760bc338226f6506f0a9a..ec82dd165edbe7a12d455a2aaec926bc6e6fa41f 100644
+--- a/net/minecraft/world/level/block/MangrovePropaguleBlock.java
++++ b/net/minecraft/world/level/block/MangrovePropaguleBlock.java
+@@ -71,7 +71,7 @@ public class MangrovePropaguleBlock extends SaplingBlock implements SimpleWaterl
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        return isHanging(state) ? level.getBlockState(pos.above()).is(Blocks.MANGROVE_LEAVES) : super.canSurvive(state, level, pos);
++        return isHanging(state) ? level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()).is(Blocks.MANGROVE_LEAVES) : super.canSurvive(state, level, pos); // Papercut
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/level/block/NyliumBlock.java b/net/minecraft/world/level/block/NyliumBlock.java
+index 7357bf27bb0890cefd8f8188a7a326a631cd0ff6..18ef802f5003ffc4d7880d2a52766add567cc309 100644
+--- a/net/minecraft/world/level/block/NyliumBlock.java
++++ b/net/minecraft/world/level/block/NyliumBlock.java
+@@ -30,8 +30,7 @@ public class NyliumBlock extends Block implements BonemealableBlock {
+     }
+ 
+     private static boolean canBeNylium(BlockState state, LevelReader level, BlockPos pos) {
+-        BlockPos blockPos = pos.above();
+-        BlockState blockState = level.getBlockState(blockPos);
++        BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()); // Papercut
+         int lightBlockInto = LightEngine.getLightBlockInto(state, blockState, Direction.UP, blockState.getLightBlock());
+         return lightBlockInto < 15;
+     }
+diff --git a/net/minecraft/world/level/block/ObserverBlock.java b/net/minecraft/world/level/block/ObserverBlock.java
+index 3c12d8e23f20b666b0005e597ba2e803c02d5d78..7ea1ec945593029326af934959009fc668bd14d1 100644
+--- a/net/minecraft/world/level/block/ObserverBlock.java
++++ b/net/minecraft/world/level/block/ObserverBlock.java
+@@ -111,6 +111,17 @@ public class ObserverBlock extends DirectionalBlock {
+         return state.getSignal(level, pos, side);
+     }
+ 
++    // Papercut
++    @Override
++    protected int papercut$getDirectSignal(BlockState blockState, BlockGetter blockAccess, int x, int y, int z, Direction side) {
++        return blockState.papercut$getSignal(blockAccess, x, y, z, side);
++    }
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction side) {
++        return blockState.getValue(POWERED) && blockState.getValue(FACING) == side ? 15 : 0;
++    }
++    // Papercut
++
+     @Override
+     protected int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+         return state.getValue(POWERED) && state.getValue(FACING) == side ? 15 : 0;
+diff --git a/net/minecraft/world/level/block/PitcherCropBlock.java b/net/minecraft/world/level/block/PitcherCropBlock.java
+index cbaf7ea236e8689793af65f29af3f1860644d152..d4eb389eef154eb8c980af063814a9c39c054674 100644
+--- a/net/minecraft/world/level/block/PitcherCropBlock.java
++++ b/net/minecraft/world/level/block/PitcherCropBlock.java
+@@ -186,9 +186,10 @@ public class PitcherCropBlock extends DoublePlantBlock implements BonemealableBl
+         if (isLower(state)) {
+             return new PitcherCropBlock.PosAndState(pos, state);
+         } else {
+-            BlockPos blockPos = pos.below();
+-            BlockState blockState = level.getBlockState(blockPos);
+-            return isLower(blockState) ? new PitcherCropBlock.PosAndState(blockPos, blockState) : null;
++            // Papercut
++            BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ());
++            return isLower(blockState) ? new PitcherCropBlock.PosAndState(pos.below(), blockState) : null;
++            // Papercut
+         }
+     }
+ 
+diff --git a/net/minecraft/world/level/block/PoweredBlock.java b/net/minecraft/world/level/block/PoweredBlock.java
+index daf9573c50938f465ed33200dd8b304054d7b15e..281b7d104b71d6b68d5c2c004153108d93cddb76 100644
+--- a/net/minecraft/world/level/block/PoweredBlock.java
++++ b/net/minecraft/world/level/block/PoweredBlock.java
+@@ -28,4 +28,10 @@ public class PoweredBlock extends Block {
+     protected int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+         return 15;
+     }
++    // Papercut
++        @Override
++        protected int papercut$getSignal(BlockState state, BlockGetter level, int x, int y, int z, Direction direction) {
++        return 15;
++    }
++    // Papercut
+ }
+diff --git a/net/minecraft/world/level/block/RailState.java b/net/minecraft/world/level/block/RailState.java
+index d527a5dcb1986e7284b7b25adca13b825844db95..550d7caeca0d5ccc22a02fb48e0d7f72958abf11 100644
+--- a/net/minecraft/world/level/block/RailState.java
++++ b/net/minecraft/world/level/block/RailState.java
+@@ -102,14 +102,17 @@ public class RailState {
+         if (BaseRailBlock.isRail(blockState)) {
+             return new RailState(this.level, pos, blockState);
+         } else {
+-            BlockPos blockPos = pos.above();
+-            blockState = this.level.getBlockState(blockPos);
++            // Papercut
++            final int x = pos.getX();
++            final int y = pos.getY();
++            final int z = pos.getZ();
++            blockState = this.level.papercut$getBlockState(x, y + 1, z);
+             if (BaseRailBlock.isRail(blockState)) {
+-                return new RailState(this.level, blockPos, blockState);
++                return new RailState(this.level, pos.above(), blockState);
+             } else {
+-                blockPos = pos.below();
+-                blockState = this.level.getBlockState(blockPos);
+-                return BaseRailBlock.isRail(blockState) ? new RailState(this.level, blockPos, blockState) : null;
++                blockState = this.level.papercut$getBlockState(x, y - 1, z);
++                return BaseRailBlock.isRail(blockState) ? new RailState(this.level, pos.below(), blockState) : null;
++                // Papercut
+             }
+         }
+     }
+diff --git a/net/minecraft/world/level/block/RedStoneOreBlock.java b/net/minecraft/world/level/block/RedStoneOreBlock.java
+index 8ef666854fa5342261626ad0bb12d72d1cb0cee2..82542ece677af3ba3b3060bcac587f045f982171 100644
+--- a/net/minecraft/world/level/block/RedStoneOreBlock.java
++++ b/net/minecraft/world/level/block/RedStoneOreBlock.java
+@@ -134,9 +134,13 @@ public class RedStoneOreBlock extends Block {
+         double d = 0.5625;
+         RandomSource randomSource = level.random;
+ 
+-        for (Direction direction : Direction.values()) {
+-            BlockPos blockPos = pos.relative(direction);
+-            if (!level.getBlockState(blockPos).isSolidRender()) {
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        for (Direction direction : Direction.VALUES) {
++            if (!level.papercut$getBlockState(x + direction.getStepX(), y + direction.getStepY(), z + direction.getStepZ()).isSolidRender()) {
++                // Papercut
+                 Direction.Axis axis = direction.getAxis();
+                 double d1 = axis == Direction.Axis.X ? 0.5 + 0.5625 * direction.getStepX() : randomSource.nextFloat();
+                 double d2 = axis == Direction.Axis.Y ? 0.5 + 0.5625 * direction.getStepY() : randomSource.nextFloat();
+diff --git a/net/minecraft/world/level/block/RedStoneWireBlock.java b/net/minecraft/world/level/block/RedStoneWireBlock.java
+index ba253a9af6141d8ea99c064e3cc0c6486c221098..e933f448910d3ac0ded889aa5befe5d1237e5f82 100644
+--- a/net/minecraft/world/level/block/RedStoneWireBlock.java
++++ b/net/minecraft/world/level/block/RedStoneWireBlock.java
+@@ -156,7 +156,7 @@ public class RedStoneWireBlock extends Block {
+     private BlockState getMissingConnections(BlockGetter level, BlockState state, BlockPos pos) {
+         boolean flag = !level.getBlockState(pos.above()).isRedstoneConductor(level, pos);
+ 
+-        for (Direction direction : Direction.Plane.HORIZONTAL) {
++        for (Direction direction : Direction.Plane.HORIZONTAL.faces) {
+             if (!state.getValue(PROPERTY_BY_DIRECTION.get(direction)).isConnected()) {
+                 RedstoneSide connectingSide = this.getConnectingSide(level, pos, direction, flag);
+                 state = state.setValue(PROPERTY_BY_DIRECTION.get(direction), connectingSide);
+@@ -209,7 +209,7 @@ public class RedStoneWireBlock extends Block {
+     protected void updateIndirectNeighbourShapes(BlockState state, LevelAccessor level, BlockPos pos, @Block.UpdateFlags int flags, int recursionLeft) {
+         BlockPos.MutableBlockPos mutableBlockPos = new BlockPos.MutableBlockPos();
+ 
+-        for (Direction direction : Direction.Plane.HORIZONTAL) {
++        for (Direction direction : Direction.Plane.HORIZONTAL.faces) {
+             BlockState currState; mutableBlockPos.setWithOffset(pos, direction); // Folia - block updates in unloaded chunks
+             RedstoneSide redstoneSide = state.getValue(PROPERTY_BY_DIRECTION.get(direction));
+             if (redstoneSide != RedstoneSide.NONE && (currState = (level instanceof net.minecraft.server.level.ServerLevel serverLevel && !ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(serverLevel, pos, 16) ? null : level.getBlockStateIfLoaded(mutableBlockPos.setWithOffset(pos, direction)))) != null && !currState.is(this)) { // Folia - block updates in unloaded chunks
+@@ -235,12 +235,17 @@ public class RedStoneWireBlock extends Block {
+     }
+ 
+     private RedstoneSide getConnectingSide(BlockGetter level, BlockPos pos, Direction direction, boolean nonNormalCubeAbove) {
+-        BlockPos blockPos = pos.relative(direction);
+-        BlockState blockState = level.getBlockState(blockPos);
++        // Papercut
++        final int x = pos.getX() + direction.getStepX();
++        final int y = pos.getY() + direction.getStepY();
++        final int z = pos.getZ() + direction.getStepZ();
++        BlockPos blockPos = null;
++        BlockState blockState = level.papercut$getBlockState(x, y, z);
+         if (nonNormalCubeAbove) {
+-            boolean flag = blockState.getBlock() instanceof TrapDoorBlock || this.canSurviveOn(level, blockPos, blockState);
+-            if (flag && shouldConnectTo(level.getBlockState(blockPos.above()))) {
+-                if (blockState.isFaceSturdy(level, blockPos, direction.getOpposite())) {
++            boolean flag = blockState.getBlock() instanceof TrapDoorBlock || this.canSurviveOn(level, blockPos = new BlockPos(x, y, z), blockState);
++            if (flag && shouldConnectTo(level.papercut$getBlockState(x, y + 1, z))) {
++                if (blockState.isFaceSturdy(level, blockPos == null ? new BlockPos(x, y, z) : blockPos, direction.getOpposite())) {
++                    // Papercut
+                     return RedstoneSide.UP;
+                 }
+ 
+@@ -249,7 +254,7 @@ public class RedStoneWireBlock extends Block {
+         }
+ 
+         return !shouldConnectTo(blockState, direction)
+-                && (blockState.isRedstoneConductor(level, blockPos) || !shouldConnectTo(level.getBlockState(blockPos.below())))
++                && (blockState.isRedstoneConductor(level, blockPos == null ? new BlockPos(x, y, z) : blockPos) || !shouldConnectTo(level.papercut$getBlockState(x, y - 1, z))) // Papercut
+             ? RedstoneSide.NONE
+             : RedstoneSide.SIDE;
+     }
+@@ -343,7 +348,7 @@ public class RedStoneWireBlock extends Block {
+         if (level.getBlockState(pos).is(this)) {
+             level.updateNeighborsAt(pos, this);
+ 
+-            for (Direction direction : Direction.values()) {
++            for (Direction direction : Direction.VALUES) {
+                 level.updateNeighborsAt(pos.relative(direction), this);
+             }
+         }
+@@ -360,7 +365,7 @@ public class RedStoneWireBlock extends Block {
+             }
+             // Paper end - optimize redstone
+ 
+-            for (Direction direction : Direction.Plane.VERTICAL) {
++            for (Direction direction : Direction.Plane.VERTICAL.faces) {
+                 level.updateNeighborsAt(pos.relative(direction), this);
+             }
+ 
+@@ -371,7 +376,7 @@ public class RedStoneWireBlock extends Block {
+     @Override
+     protected void affectNeighborsAfterRemoval(BlockState state, ServerLevel level, BlockPos pos, boolean movedByPiston) {
+         if (!movedByPiston) {
+-            for (Direction direction : Direction.values()) {
++            for (Direction direction : Direction.VALUES) {
+                 level.updateNeighborsAt(pos.relative(direction), this);
+             }
+ 
+@@ -387,11 +392,11 @@ public class RedStoneWireBlock extends Block {
+     }
+ 
+     private void updateNeighborsOfNeighboringWires(Level level, BlockPos pos) {
+-        for (Direction direction : Direction.Plane.HORIZONTAL) {
++        for (Direction direction : Direction.Plane.HORIZONTAL.faces) {
+             this.checkCornerChangeAt(level, pos.relative(direction));
+         }
+ 
+-        for (Direction direction : Direction.Plane.HORIZONTAL) {
++        for (Direction direction : Direction.Plane.HORIZONTAL.faces) {
+             BlockPos blockPos = pos.relative(direction);
+             if (level.getBlockState(blockPos).isRedstoneConductor(level, blockPos)) {
+                 this.checkCornerChangeAt(level, blockPos.above());
+@@ -429,6 +434,66 @@ public class RedStoneWireBlock extends Block {
+     protected int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+         return !io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData().shouldSignal ? 0 : state.getSignal(level, pos, side); // Folia - region threading
+     }
++    // Papercut
++    @Override
++    protected int papercut$getDirectSignal(BlockState blockState, BlockGetter blockAccess, int x, int y, int z, Direction side) {
++        return !io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData().shouldSignal ? 0 : blockState.papercut$getSignal(blockAccess, x, y, z, side);
++    }
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter blockAccess, int x, int y, int z, Direction side) {
++        if (io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData().shouldSignal && side != Direction.DOWN) {
++            int powerValue = blockState.getValue(POWER);
++            if (powerValue == 0) {
++                return 0;
++            } else {
++                return side != Direction.UP
++                        && !this.papercut$getConnectionState(blockAccess, blockState, x, y, z).getValue(PROPERTY_BY_DIRECTION.get(side.getOpposite())).isConnected()
++                        ? 0
++                        : powerValue;
++            }
++        } else {
++            return 0;
++        }
++    }
++    private BlockState papercut$getConnectionState(BlockGetter level, BlockState state, int x, int y, int z) {
++        boolean isDot = isDot(state);
++        state = this.papercut$getMissingConnections(level, this.defaultBlockState().setValue(POWER, state.getValue(POWER)), x, y, z);
++        if (isDot && isDot(state)) {
++            return state;
++        } else {
++            boolean isConnected = state.getValue(NORTH).isConnected();
++            boolean isConnected1 = state.getValue(SOUTH).isConnected();
++            boolean isConnected2 = state.getValue(EAST).isConnected();
++            boolean isConnected3 = state.getValue(WEST).isConnected();
++            boolean flag = !isConnected && !isConnected1;
++            boolean flag1 = !isConnected2 && !isConnected3;
++            if (!isConnected3 && flag) {
++                state = state.setValue(WEST, RedstoneSide.SIDE);
++            }
++            if (!isConnected2 && flag) {
++                state = state.setValue(EAST, RedstoneSide.SIDE);
++            }
++            if (!isConnected && flag1) {
++                state = state.setValue(NORTH, RedstoneSide.SIDE);
++            }
++            if (!isConnected1 && flag1) {
++                state = state.setValue(SOUTH, RedstoneSide.SIDE);
++            }
++            return state;
++        }
++    }
++    private BlockState papercut$getMissingConnections(BlockGetter level, BlockState state, int x, int y, int z) {
++        BlockPos pos = new BlockPos(x, y, z);
++        boolean flag = !level.papercut$getBlockState(x, y + 1, z).isRedstoneConductor(level, pos);
++        for (Direction direction : Direction.Plane.HORIZONTAL.faces) {
++            if (!state.getValue(PROPERTY_BY_DIRECTION.get(direction)).isConnected()) {
++                RedstoneSide connectingSide = this.getConnectingSide(level, pos, direction, flag);
++                state = state.setValue(PROPERTY_BY_DIRECTION.get(direction), connectingSide);
++            }
++        }
++        return state;
++    }
++    // Papercut
+ 
+     @Override
+     protected int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+@@ -492,7 +557,7 @@ public class RedStoneWireBlock extends Block {
+     public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random) {
+         int powerValue = state.getValue(POWER);
+         if (powerValue != 0) {
+-            for (Direction direction : Direction.Plane.HORIZONTAL) {
++            for (Direction direction : Direction.Plane.HORIZONTAL.faces) {
+                 RedstoneSide redstoneSide = state.getValue(PROPERTY_BY_DIRECTION.get(direction));
+                 switch (redstoneSide) {
+                     case UP:
+@@ -571,7 +636,7 @@ public class RedStoneWireBlock extends Block {
+     private void updatesOnShapeChange(Level level, BlockPos pos, BlockState oldState, BlockState newState) {
+         Orientation orientation = ExperimentalRedstoneUtils.initialOrientation(level, null, Direction.UP);
+ 
+-        for (Direction direction : Direction.Plane.HORIZONTAL) {
++        for (Direction direction : Direction.Plane.HORIZONTAL.faces) {
+             BlockPos blockPos = pos.relative(direction);
+             if (oldState.getValue(PROPERTY_BY_DIRECTION.get(direction)).isConnected() != newState.getValue(PROPERTY_BY_DIRECTION.get(direction)).isConnected()
+                 && level.getBlockState(blockPos).isRedstoneConductor(level, blockPos)) {
+diff --git a/net/minecraft/world/level/block/RedstoneTorchBlock.java b/net/minecraft/world/level/block/RedstoneTorchBlock.java
+index d1dbfc821f068f14bf975842f66251816ea5c985..221daa3d72043e7962a386a5914c71eaa43d1822 100644
+--- a/net/minecraft/world/level/block/RedstoneTorchBlock.java
++++ b/net/minecraft/world/level/block/RedstoneTorchBlock.java
+@@ -132,6 +132,17 @@ public class RedstoneTorchBlock extends BaseTorchBlock {
+         return side == Direction.DOWN ? state.getSignal(level, pos, side) : 0;
+     }
+ 
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction side) {
++        return blockState.getValue(LIT) && Direction.UP != side ? 15 : 0;
++    }
++    @Override
++    protected int papercut$getDirectSignal(BlockState blockState, BlockGetter blockAccess, int x, int y, int z, Direction side) {
++        return side == Direction.DOWN ? blockState.papercut$getSignal(blockAccess, x, y, z, side) : 0;
++    }
++    // Papercut
++
+     @Override
+     protected boolean isSignalSource(BlockState state) {
+         return true;
+diff --git a/net/minecraft/world/level/block/RedstoneWallTorchBlock.java b/net/minecraft/world/level/block/RedstoneWallTorchBlock.java
+index f79c7f17fb0a53b23f58bfd294c736b25bc6776e..454dbc10042158c4a46dcdcb1ce109aef9d88beb 100644
+--- a/net/minecraft/world/level/block/RedstoneWallTorchBlock.java
++++ b/net/minecraft/world/level/block/RedstoneWallTorchBlock.java
+@@ -89,6 +89,13 @@ public class RedstoneWallTorchBlock extends RedstoneTorchBlock {
+         return state.getValue(LIT) && state.getValue(FACING) != side ? 15 : 0;
+     }
+ 
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction side) {
++        return blockState.getValue(LIT) && blockState.getValue(FACING) != side ? 15 : 0;
++    }
++    // Papercut
++
+     @Override
+     protected BlockState rotate(BlockState state, Rotation rotation) {
+         return state.setValue(FACING, rotation.rotate(state.getValue(FACING)));
+diff --git a/net/minecraft/world/level/block/SculkSensorBlock.java b/net/minecraft/world/level/block/SculkSensorBlock.java
+index 80e6ba8f026a6565696f18304507b2d0a347650c..4bb404b38f8c86dfced68f424abfbb6a9e7432a6 100644
+--- a/net/minecraft/world/level/block/SculkSensorBlock.java
++++ b/net/minecraft/world/level/block/SculkSensorBlock.java
+@@ -195,6 +195,17 @@ public class SculkSensorBlock extends BaseEntityBlock implements SimpleWaterlogg
+         return direction == Direction.UP ? state.getSignal(level, pos, direction) : 0;
+     }
+ 
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState state, BlockGetter level, int x, int y, int z, Direction direction) {
++        return state.getValue(POWER);
++    }
++    @Override
++    protected int papercut$getDirectSignal(BlockState state, BlockGetter level, int x, int y, int z, Direction direction) {
++        return direction == Direction.UP ? state.papercut$getSignal(level, x, y, z, direction) : 0;
++    }
++    // Papercut
++
+     public static SculkSensorPhase getPhase(BlockState state) {
+         return state.getValue(PHASE);
+     }
+@@ -253,10 +264,18 @@ public class SculkSensorBlock extends BaseEntityBlock implements SimpleWaterlogg
+     }
+ 
+     public static void tryResonateVibration(@Nullable Entity entity, Level level, BlockPos pos, int frequency) {
+-        for (Direction direction : Direction.values()) {
+-            BlockPos blockPos = pos.relative(direction);
+-            BlockState blockState = level.getBlockState(blockPos);
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        for (Direction direction : Direction.VALUES) {
++            final int x1 = x + direction.getStepX();
++            final int y1 = y + direction.getStepY();
++            final int z1 = z + direction.getStepZ();
++            BlockState blockState = level.papercut$getBlockState(x1, y1, z1);
+             if (blockState.is(BlockTags.VIBRATION_RESONATORS)) {
++                BlockPos blockPos = new BlockPos(x1, y1, z1);
++                // Papercut
+                 level.gameEvent(VibrationSystem.getResonanceEventByFrequency(frequency), blockPos, GameEvent.Context.of(entity, blockState));
+                 float f = RESONANCE_PITCH_BEND[frequency];
+                 level.playSound(null, blockPos, SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.BLOCKS, 1.0F, f);
+diff --git a/net/minecraft/world/level/block/SeaPickleBlock.java b/net/minecraft/world/level/block/SeaPickleBlock.java
+index f59fb2923bbcdf9bc73747b6aa9199fef4c2319f..93f6ee79eee831b0acdf3f2f032246e254e63523 100644
+--- a/net/minecraft/world/level/block/SeaPickleBlock.java
++++ b/net/minecraft/world/level/block/SeaPickleBlock.java
+@@ -121,7 +121,7 @@ public class SeaPickleBlock extends VegetationBlock implements BonemealableBlock
+ 
+     @Override
+     public boolean isValidBonemealTarget(LevelReader level, BlockPos pos, BlockState state) {
+-        return !isDead(state) && level.getBlockState(pos.below()).is(BlockTags.CORAL_BLOCKS);
++        return !isDead(state) && level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()).is(BlockTags.CORAL_BLOCKS); // Papercut
+     }
+ 
+     @Override
+@@ -145,7 +145,7 @@ public class SeaPickleBlock extends VegetationBlock implements BonemealableBlock
+                 for (int i9 = i8 - 2; i9 < i8; i9++) {
+                     BlockPos blockPos = new BlockPos(i4 + i6, i9, pos.getZ() - i5 + i7);
+                     if (!blockPos.equals(pos) && random.nextInt(6) == 0 && level.getBlockState(blockPos).is(Blocks.WATER)) {
+-                        BlockState blockState = level.getBlockState(blockPos.below());
++                        BlockState blockState = level.papercut$getBlockState(blockPos.getX(), blockPos.getY() - 1, blockPos.getZ()); // Papercut
+                         if (blockState.is(BlockTags.CORAL_BLOCKS)) {
+                             level.setBlock(blockPos, Blocks.SEA_PICKLE.defaultBlockState().setValue(PICKLES, random.nextInt(4) + 1), Block.UPDATE_ALL);
+                         }
+diff --git a/net/minecraft/world/level/block/SeagrassBlock.java b/net/minecraft/world/level/block/SeagrassBlock.java
+index a41270e041ab408dc6ac1207f7b6ec2eaff161d4..347c2e0f35d07f4acd07732c6b4f6145cd6dd540 100644
+--- a/net/minecraft/world/level/block/SeagrassBlock.java
++++ b/net/minecraft/world/level/block/SeagrassBlock.java
+@@ -73,7 +73,7 @@ public class SeagrassBlock extends VegetationBlock implements BonemealableBlock,
+ 
+     @Override
+     public boolean isValidBonemealTarget(LevelReader level, BlockPos pos, BlockState state) {
+-        return level.getBlockState(pos.above()).is(Blocks.WATER);
++        return level.papercut$getBlockState(pos.getX(), pos.getY() + 1, pos.getZ()).is(Blocks.WATER); // Papercut
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/level/block/SmallDripleafBlock.java b/net/minecraft/world/level/block/SmallDripleafBlock.java
+index d5821239d33aad9213b9a87d225e942934623857..b39988727129067d2db40b0ad1f6d7f799bd3c0c 100644
+--- a/net/minecraft/world/level/block/SmallDripleafBlock.java
++++ b/net/minecraft/world/level/block/SmallDripleafBlock.java
+@@ -52,7 +52,7 @@ public class SmallDripleafBlock extends DoublePlantBlock implements Bonemealable
+     @Override
+     protected boolean mayPlaceOn(BlockState state, BlockGetter level, BlockPos pos) {
+         return state.is(BlockTags.SMALL_DRIPLEAF_PLACEABLE)
+-            || level.getFluidState(pos.above()).isSourceOfType(Fluids.WATER) && super.mayPlaceOn(state, level, pos);
++                || level.papercut$getFluidState(pos.getX(), pos.getY() + 1, pos.getZ()).isSourceOfType(Fluids.WATER) && super.mayPlaceOn(state, level, pos); // Papercut
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/level/block/SpreadingSnowyDirtBlock.java b/net/minecraft/world/level/block/SpreadingSnowyDirtBlock.java
+index 5f70720203b892e5d85ada84fdb4e912a362f327..db1628b8c519b794e38923c4c9f05a76fa5fc1ec 100644
+--- a/net/minecraft/world/level/block/SpreadingSnowyDirtBlock.java
++++ b/net/minecraft/world/level/block/SpreadingSnowyDirtBlock.java
+@@ -18,12 +18,11 @@ public abstract class SpreadingSnowyDirtBlock extends SnowyDirtBlock {
+ 
+     private static boolean canBeGrass(BlockState state, LevelReader level, BlockPos pos) {
+         // Paper start - Perf: optimize dirt and snow spreading
+-        return canBeGrass(level.getChunk(pos), state, level, pos);
++        return canBeGrass(level.getChunk(pos), state, level, pos.getX(), pos.getY(), pos.getZ()); // Papercut
+     }
+-    private static boolean canBeGrass(net.minecraft.world.level.chunk.ChunkAccess chunk, BlockState state, LevelReader level, BlockPos pos) {
++    private static boolean canBeGrass(net.minecraft.world.level.chunk.ChunkAccess chunk, BlockState state, LevelReader levelReader, int x, int y, int z) { // Papercut
+         // Paper end - Perf: optimize dirt and snow spreading
+-        BlockPos blockPos = pos.above();
+-        BlockState blockState = chunk.getBlockState(blockPos); // Paper - Perf: optimize dirt and snow spreading
++        BlockState blockState = chunk.getBlockState(x, y + 1, z); // Paper - Perf: optimize dirt and snow spreading // Papercut
+         if (blockState.is(Blocks.SNOW) && blockState.getValue(SnowLayerBlock.LAYERS) == 1) {
+             return true;
+         } else if (blockState.getFluidState().getAmount() == 8) {
+@@ -39,13 +38,12 @@ public abstract class SpreadingSnowyDirtBlock extends SnowyDirtBlock {
+ 
+     private static boolean canPropagate(BlockState state, LevelReader level, BlockPos pos) {
+         // Paper start - Perf: optimize dirt and snow spreading
+-        return canPropagate(level.getChunk(pos), state, level, pos);
++        return canPropagate(level.getChunk(pos), state, level, pos.getX(), pos.getY(), pos.getZ()); // Papercut
+     }
+ 
+-    private static boolean canPropagate(net.minecraft.world.level.chunk.ChunkAccess chunk, BlockState state, LevelReader level, BlockPos pos) {
++    private static boolean canPropagate(net.minecraft.world.level.chunk.ChunkAccess chunk, BlockState state, LevelReader level, int x, int y, int z) { // Papercut
+         // Paper end - Perf: optimize dirt and snow spreading
+-        BlockPos blockPos = pos.above();
+-        return canBeGrass(chunk, state, level, pos) && !chunk.getFluidState(blockPos).is(FluidTags.WATER); // Paper - Perf: optimize dirt and snow spreading
++        return canBeGrass(chunk, state, level, x, y, z) && !chunk.papercut$getFluidState(x, y + 1, z).is(FluidTags.WATER); // Paper - Perf: optimize dirt and snow spreading // Papercut
+     }
+ 
+     @Override
+@@ -57,7 +55,7 @@ public abstract class SpreadingSnowyDirtBlock extends SnowyDirtBlock {
+             return;
+         }
+ 
+-        if (!canBeGrass(cachedBlockChunk, state, level, pos)) {
++        if (!canBeGrass(cachedBlockChunk, state, level, pos.getX(), pos.getY(), pos.getZ())) { // Papercut
+             // Paper end - Perf: optimize dirt and snow spreading
+             // CraftBukkit start
+             if (org.bukkit.craftbukkit.event.CraftEventFactory.callBlockFadeEvent(level, pos, Blocks.DIRT.defaultBlockState()).isCancelled()) {
+@@ -69,21 +67,31 @@ public abstract class SpreadingSnowyDirtBlock extends SnowyDirtBlock {
+             if (level.getMaxLocalRawBrightness(pos.above()) >= 9) {
+                 BlockState blockState = this.defaultBlockState();
+ 
++                // Papercut
++                final int originX = pos.getX();
++                final int originY = pos.getY();
++                final int originZ = pos.getZ();
+                 for (int i = 0; i < 4; i++) {
+-                    BlockPos blockPos = pos.offset(random.nextInt(3) - 1, random.nextInt(5) - 3, random.nextInt(3) - 1);
++                    final int x = originX + (random.nextInt(3) - 1);
++                    final int y = originY + (random.nextInt(5) - 3);
++                    final int z = originZ + (random.nextInt(3) - 1);
+                     // Paper start - Perf: optimize dirt and snow spreading
+-                    if (pos.getX() == blockPos.getX() && pos.getY() == blockPos.getY() && pos.getZ() == blockPos.getZ()) {
++                    if (originX == x && originY == y && originZ == z) {
++                        // Papercut
+                         continue;
+                     }
+ 
+                     final net.minecraft.world.level.chunk.ChunkAccess access;
+-                    if (cachedBlockChunk.locX == blockPos.getX() >> 4 && cachedBlockChunk.locZ == blockPos.getZ() >> 4) {
++                    if (cachedBlockChunk.locX == x >> 4 && cachedBlockChunk.locZ == z >> 4) { // Papercut
+                         access = cachedBlockChunk;
+                     } else {
+-                        access = level.getChunkAt(blockPos);
++                        access = level.getChunkIfLoaded(x >> 4, z >> 4); // Papercut
+                     }
+-                    if (access.getBlockState(blockPos).is(Blocks.DIRT) && SpreadingSnowyDirtBlock.canPropagate(access, blockState, level, blockPos)) {
+-                        org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockSpreadEvent(level, pos, blockPos, blockState.setValue(SNOWY, isSnowySetting(access.getBlockState(blockPos.above()))), Block.UPDATE_ALL); // CraftBukkit
++                    if (access == null) continue;
++                    // Papercut
++                    if (access.getBlockState(x, y, z).is(Blocks.DIRT) && SpreadingSnowyDirtBlock.canPropagate(access, blockState, level, x, y, z)) {
++                        org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockSpreadEvent(level, pos, new BlockPos(x, y, z), blockState.setValue(SNOWY, isSnowySetting(access.getBlockState(x, y + 1, z))), Block.UPDATE_ALL); // CraftBukkit
++                        // Papercut
+                         // Paper end - Perf: optimize dirt and snow spreading
+                     }
+                 }
+diff --git a/net/minecraft/world/level/block/SugarCaneBlock.java b/net/minecraft/world/level/block/SugarCaneBlock.java
+index 4437fd5724e094e8d2edb97ca9bf494ef57f5b79..52b3fe1d8efe301efe81077bcdc036a131a27684 100644
+--- a/net/minecraft/world/level/block/SugarCaneBlock.java
++++ b/net/minecraft/world/level/block/SugarCaneBlock.java
+@@ -88,16 +88,21 @@ public class SugarCaneBlock extends Block {
+ 
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+-        BlockState blockState = level.getBlockState(pos.below());
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        BlockState blockState = level.papercut$getBlockState(x, y - 1, z);
++        // Papercut
+         if (blockState.is(this)) {
+             return true;
+         } else {
+             if (blockState.is(BlockTags.DIRT) || blockState.is(BlockTags.SAND)) {
+                 BlockPos blockPos = pos.below();
+ 
+-                for (Direction direction : Direction.Plane.HORIZONTAL) {
+-                    BlockState blockState1 = level.getBlockState(blockPos.relative(direction));
+-                    FluidState fluidState = level.getFluidState(blockPos.relative(direction));
++                for (Direction direction : Direction.Plane.HORIZONTAL.faces) {
++                    BlockState blockState1 = level.papercut$getBlockState(x + direction.getStepX(), (y - 1) + direction.getStepY(), z + direction.getStepZ());
++                    FluidState fluidState = blockState1.getFluidState();
+                     if (fluidState.is(FluidTags.WATER) || blockState1.is(Blocks.FROSTED_ICE)) {
+                         return true;
+                     }
+diff --git a/net/minecraft/world/level/block/TallSeagrassBlock.java b/net/minecraft/world/level/block/TallSeagrassBlock.java
+index a7ddda8105a1cd16efc8d191e5a97130c1fbd2ff..aed49b4005ba2c6d06a1ca759118c604f5db8848 100644
+--- a/net/minecraft/world/level/block/TallSeagrassBlock.java
++++ b/net/minecraft/world/level/block/TallSeagrassBlock.java
+@@ -54,7 +54,10 @@ public class TallSeagrassBlock extends DoublePlantBlock implements LiquidBlockCo
+     public @Nullable BlockState getStateForPlacement(BlockPlaceContext context) {
+         BlockState blockState = super.getStateForPlacement(context);
+         if (blockState != null) {
+-            FluidState fluidState = context.getLevel().getFluidState(context.getClickedPos().above());
++            // Papercut
++            final BlockPos clickedPos = context.getClickedPos();
++            FluidState fluidState = context.getLevel().papercut$getFluidState(clickedPos.getX(), clickedPos.getY() + 1, clickedPos.getZ());
++            // Papercut
+             if (fluidState.is(FluidTags.WATER) && fluidState.getAmount() == 8) {
+                 return blockState;
+             }
+@@ -66,7 +69,7 @@ public class TallSeagrassBlock extends DoublePlantBlock implements LiquidBlockCo
+     @Override
+     protected boolean canSurvive(BlockState state, LevelReader level, BlockPos pos) {
+         if (state.getValue(HALF) == DoubleBlockHalf.UPPER) {
+-            BlockState blockState = level.getBlockState(pos.below());
++            BlockState blockState = level.papercut$getBlockState(pos.getX(), pos.getY() - 1, pos.getZ()); // Papercut
+             return blockState.is(this) && blockState.getValue(HALF) == DoubleBlockHalf.LOWER;
+         } else {
+             FluidState fluidState = level.getFluidState(pos);
+diff --git a/net/minecraft/world/level/block/TargetBlock.java b/net/minecraft/world/level/block/TargetBlock.java
+index 8085b328095a345e75960e456c54c189c7a4341d..d27c1e56adcf1f86115c9cc817e7be9edbff01c1 100644
+--- a/net/minecraft/world/level/block/TargetBlock.java
++++ b/net/minecraft/world/level/block/TargetBlock.java
+@@ -117,6 +117,13 @@ public class TargetBlock extends Block {
+         return state.getValue(OUTPUT_POWER);
+     }
+ 
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction direction) {
++        return blockState.getValue(OUTPUT_POWER);
++    }
++    // Papercut
++
+     @Override
+     protected boolean isSignalSource(BlockState state) {
+         return true;
+diff --git a/net/minecraft/world/level/block/TestBlock.java b/net/minecraft/world/level/block/TestBlock.java
+index 9252a06298e87580e2da6ab5222563ea031c8072..572ac3870c8755a1bcb155a6777895960d5a238b 100644
+--- a/net/minecraft/world/level/block/TestBlock.java
++++ b/net/minecraft/world/level/block/TestBlock.java
+@@ -115,6 +115,19 @@ public class TestBlock extends BaseEntityBlock implements GameMasterBlock {
+         }
+     }
+ 
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState state, BlockGetter level, int x, int y, int z, Direction direction) {
++        if (state.getValue(MODE) != TestBlockMode.START) {
++            return 0;
++        } else if (level.getBlockEntity(new BlockPos(x, y, z)) instanceof TestBlockEntity testBlockEntity) {
++            return testBlockEntity.isPowered() ? 15 : 0;
++        } else {
++            return 0;
++        }
++    }
++    // Papercut
++
+     @Override
+     protected ItemStack getCloneItemStack(LevelReader level, BlockPos pos, BlockState state, boolean includeData) {
+         ItemStack itemStack = super.getCloneItemStack(level, pos, state, includeData);
+diff --git a/net/minecraft/world/level/block/TrappedChestBlock.java b/net/minecraft/world/level/block/TrappedChestBlock.java
+index 29b40764a8e059ba0b902325f7a1272e647c7bb5..a03b4fb919580f6551db790dcfd02ff09c5c0ca9 100644
+--- a/net/minecraft/world/level/block/TrappedChestBlock.java
++++ b/net/minecraft/world/level/block/TrappedChestBlock.java
+@@ -52,4 +52,15 @@ public class TrappedChestBlock extends ChestBlock {
+     protected int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+         return side == Direction.UP ? state.getSignal(level, pos, side) : 0;
+     }
++
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState state, BlockGetter blockAccess, int x, int y, int z, Direction direction) {
++        return Mth.clamp(ChestBlockEntity.papercut$getOpenCount(blockAccess, x, y, z), 0, 15);
++    }
++    @Override
++    protected int papercut$getDirectSignal(BlockState blockState, BlockGetter blockAccess, int x, int y, int z, Direction side) {
++        return side == Direction.UP ? blockState.papercut$getSignal(blockAccess, x, y, z, side) : 0;
++    }
++    // Papercut
+ }
+diff --git a/net/minecraft/world/level/block/TripWireHookBlock.java b/net/minecraft/world/level/block/TripWireHookBlock.java
+index 292fe41967db74884e5937cb125f1e022ccfb6bd..e1a1908bce082d72246ce7fcb5047a79443d3e26 100644
+--- a/net/minecraft/world/level/block/TripWireHookBlock.java
++++ b/net/minecraft/world/level/block/TripWireHookBlock.java
+@@ -266,6 +266,21 @@ public class TripWireHookBlock extends Block {
+         }
+     }
+ 
++    // Papercut
++    @Override
++    protected int papercut$getSignal(BlockState blockState, BlockGetter level, int x, int y, int z, Direction direction) {
++        return blockState.getValue(POWERED) ? 15 : 0;
++    }
++    @Override
++    protected int papercut$getDirectSignal(BlockState blockState, BlockGetter blockAccess, int x, int y, int z, Direction side) {
++        if (!blockState.getValue(POWERED)) {
++            return 0;
++        } else {
++            return blockState.getValue(FACING) == side ? 15 : 0;
++        }
++    }
++    // Papercut
++
+     @Override
+     protected boolean isSignalSource(BlockState state) {
+         return true;
+diff --git a/net/minecraft/world/level/block/WaterlilyBlock.java b/net/minecraft/world/level/block/WaterlilyBlock.java
+index 3e8d3e49bced11e3a1349a8354ae7111c97f155e..878b1572dc7f7e2eebd446f51eb13d715df14723 100644
+--- a/net/minecraft/world/level/block/WaterlilyBlock.java
++++ b/net/minecraft/world/level/block/WaterlilyBlock.java
+@@ -49,8 +49,12 @@ public class WaterlilyBlock extends VegetationBlock {
+ 
+     @Override
+     protected boolean mayPlaceOn(BlockState state, BlockGetter level, BlockPos pos) {
+-        FluidState fluidState = level.getFluidState(pos);
+-        FluidState fluidState1 = level.getFluidState(pos.above());
+-        return (fluidState.getType() == Fluids.WATER || state.getBlock() instanceof IceBlock) && fluidState1.getType() == Fluids.EMPTY;
++        // Papercut
++        final int x = pos.getX();
++        final int y = pos.getY();
++        final int z = pos.getZ();
++        FluidState fluidState = level.papercut$getFluidState(x, y, z);
++        return (fluidState.getType() == Fluids.WATER || state.getBlock() instanceof IceBlock) && level.papercut$getFluidState(x, y + 1, z).getType() == Fluids.EMPTY;
++        // Papercut
+     }
+ }
 diff --git a/net/minecraft/world/level/block/entity/BeaconBlockEntity.java b/net/minecraft/world/level/block/entity/BeaconBlockEntity.java
 index deaac59e24dcc8c259567545507b52ca383f391e..7357f0167deba94514bd7c7b207f3bd5338ca8a1 100644
 --- a/net/minecraft/world/level/block/entity/BeaconBlockEntity.java
