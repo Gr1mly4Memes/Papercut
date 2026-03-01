@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sun, 1 Mar 2026 12:41:40 -0800
+Subject: [PATCH] random
+
+
+diff --git a/io/papermc/paper/threadedregions/RegionizedWorldData.java b/io/papermc/paper/threadedregions/RegionizedWorldData.java
+index 1f49d787ecee4ba9dce087036a4e3cbce2228c17..d08bf17186297ed2b6524a2c0e08939c72e0f6d6 100644
+--- a/io/papermc/paper/threadedregions/RegionizedWorldData.java
++++ b/io/papermc/paper/threadedregions/RegionizedWorldData.java
+@@ -555,7 +555,7 @@ public final class RegionizedWorldData {
+     }
+ 
+     public Entity[] getLocalEntitiesCopy() {
+-        return Arrays.copyOf(this.allEntities.getRawData(), this.allEntities.size(), Entity[].class);
++        return Arrays.copyOf(this.allEntities.toArray(), this.allEntities.size(), Entity[].class);
+     }
+ 
+     public List<ServerPlayer> getLocalPlayers() {

@@ -1,14 +1,5 @@
 --- a/folia-api/build.gradle.kts
 +++ b/folia-api/build.gradle.kts
-@@ -15,7 +_,7 @@
- val adventureVersion = "4.25.0"
- val bungeeCordChatVersion = "1.21-R0.2-deprecated+build.21"
- val slf4jVersion = "2.0.16"
--val log4jVersion = "2.24.1"
-+val log4jVersion = "2.24.3" // Papercut Bump
- 
- val apiAndDocs: Configuration by configurations.creating {
-     attributes {
 @@ -42,9 +_,9 @@
  
  dependencies {
