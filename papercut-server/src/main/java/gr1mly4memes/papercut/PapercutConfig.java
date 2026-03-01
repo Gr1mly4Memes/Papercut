@@ -87,6 +87,10 @@ public final class PapercutConfig {
     // Papercut start - features
     @GlobalConfig(name = "use-compact-bit-storage",category = {"features"})
     public static boolean useCompactBitStorage = false;
+    @GlobalConfig(name = "disable-packet-limit", category = {"features"})
+    public static boolean disablePacketLimit = false;
+    @GlobalConfig(name = "disableMovedWronglyThreshold", category = {"features"})
+    public static boolean disableMovedWronglyThreshold = true;
     // Papercut end - features
 
     // Papercut start - region
