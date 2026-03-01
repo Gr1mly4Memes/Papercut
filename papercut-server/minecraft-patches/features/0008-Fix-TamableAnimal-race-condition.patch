@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sat, 28 Feb 2026 20:41:56 -0800
+Subject: [PATCH] Fix TamableAnimal race condition
+
+
+diff --git a/net/minecraft/world/entity/TamableAnimal.java b/net/minecraft/world/entity/TamableAnimal.java
+index f6b921ce3674d3c2bf963b913045a3c83c6bbf08..a08cf7e9ee17b7da45918b6533f1c7ca6247a1b3 100644
+--- a/net/minecraft/world/entity/TamableAnimal.java
++++ b/net/minecraft/world/entity/TamableAnimal.java
+@@ -270,6 +270,11 @@ public abstract class TamableAnimal extends Animal implements OwnableEntity {
+     }
+ 
+     private boolean maybeTeleportTo(int x, int y, int z) {
++        // Papercut start - Fix TamableAnimal race condition
++        if (this.level().getChunkIfLoaded(x >> 4, z >> 4) == null) {
++            return false;
++        }
++        // Papercut end - Fix TamableAnimal race condition
+         if (!this.canTeleportTo(new BlockPos(x, y, z))) {
+             return false;
+         } else {

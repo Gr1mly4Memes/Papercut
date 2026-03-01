@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sat, 28 Feb 2026 20:35:39 -0800
+Subject: [PATCH] Fix EntityDamageByEntityEvent returning wrong damager for
+ ender pearls
+
+
+diff --git a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
+index 82bfb1b3cf64416608fddefef307758ba09b40c3..3fbd4f7e563bcb8da86c66bdb9b57ae0f7bda397 100644
+--- a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
++++ b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
+@@ -76,8 +76,9 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+     }
+ 
+     // Folia start - region threading
+-    private static void attemptTeleport(Entity source, ServerLevel checkWorld, net.minecraft.world.phys.Vec3 to) {
++    private static void attemptTeleport(Entity source, Entity enderPearl, ServerLevel checkWorld, net.minecraft.world.phys.Vec3 to) { // Papercut - fix EntityDamageByEntityEvent returning wrong damager for ender pearls
+         final boolean onPortalCooldown = source.isOnPortalCooldown();
++        final Entity enderPearlFinal = enderPearl; // Papercut - capture for lambda
+         // ignore retired callback, in those cases we do not want to teleport
+         source.getBukkitEntity().taskScheduler.schedule(
+             (Entity entity) -> {
+@@ -135,7 +136,7 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+                             // damage player
+                             teleported.resetFallDistance();
+                             player.resetCurrentImpulseContext();
+-                            player.hurtServer(player.level(), player.damageSources().enderPearl().eventEntityDamager(player), 5.0F); // CraftBukkit // Paper - fix DamageSource API
++                            player.hurtServer(player.level(), player.damageSources().enderPearl().eventEntityDamager(enderPearlFinal), 5.0F); // CraftBukkit // Paper - fix DamageSource API // Papercut - fix EntityDamageByEntityEvent returning wrong damager for ender pearls
+                             playSound(teleported.level(), to);
+                         } else {
+                             // reset fall damage so that if the entity was falling they do not instantly die
+@@ -176,7 +177,7 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+                 }
+                 Entity entity = this.getOwnerRaw();
+                 if (entity != null) {
+-                    attemptTeleport(entity, (ServerLevel)this.level(), this.position());
++                    attemptTeleport(entity, this, (ServerLevel)this.level(), this.position()); // Papercut - fix EntityDamageByEntityEvent returning wrong damager for ender pearls
+                 }
+                 this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.HIT);
+                 return;
+@@ -266,7 +267,7 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+             }
+ 
+             if (this.isAlive()) {
+-                long blockPos = this.position().asBlockPosLong(); // Papercut
++                long blockPos = this.position().asBlockPosLong(); // Papercut - fix EntityDamageByEntityEvent returning wrong damager for ender pearls
+                 if ((
+                         --this.ticketTimer <= 0L
+                                 // Papercut

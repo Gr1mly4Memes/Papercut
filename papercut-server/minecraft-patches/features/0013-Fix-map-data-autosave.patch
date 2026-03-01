@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sat, 28 Feb 2026 21:06:01 -0800
+Subject: [PATCH] Fix map data autosave
+
+
+diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
+index 3471200d54b938ef82f142efc2fcb096d72ec7b4..ff8e61f549bf75e19d3cd417653aeb2127394ae7 100644
+--- a/net/minecraft/server/level/ServerLevel.java
++++ b/net/minecraft/server/level/ServerLevel.java
+@@ -1547,6 +1547,17 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+             this.levelStorageAccess.saveDataTag(this.server.registryAccess(), this.serverLevelData, this.server.getPlayerList().getSingleplayerData());
+         }
+         // CraftBukkit end
++        
++        // Papercut start - Fix map data autosave
++        // Save map data periodically to prevent data loss on server crashes
++        long currentTime = System.nanoTime();
++        long mapAutoSaveIntervalNanos = 600_000_000_000L; // 10 minutes in nanoseconds
++        if (currentTime - this.lastMapAutoSave >= mapAutoSaveIntervalNanos) {
++            this.lastMapAutoSave = currentTime;
++            DimensionDataStorage dataStorage = this.getChunkSource().getDataStorage();
++            dataStorage.saveMaps(); // Save map data asynchronously
++        }
++        // Papercut end
+     }
+     // Paper end - Incremental chunk and player saving
+ 

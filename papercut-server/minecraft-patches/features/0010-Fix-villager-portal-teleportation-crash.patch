@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sat, 28 Feb 2026 20:54:58 -0800
+Subject: [PATCH] Fix villager portal teleportation crash
+
+
+diff --git a/net/minecraft/world/entity/npc/villager/Villager.java b/net/minecraft/world/entity/npc/villager/Villager.java
+index 8616a8f5b720eac2bb5b3d78a3b69d40bb0b5547..18996c61b05c2296046b74edfc7e6912336870ac 100644
+--- a/net/minecraft/world/entity/npc/villager/Villager.java
++++ b/net/minecraft/world/entity/npc/villager/Villager.java
+@@ -250,7 +250,13 @@ public class Villager extends AbstractVillager implements ReputationEventHandler
+         villagerBrain.setCoreActivities(ImmutableSet.of(Activity.CORE));
+         villagerBrain.setDefaultActivity(Activity.IDLE);
+         villagerBrain.setActiveActivityIfPossible(Activity.IDLE);
+-        villagerBrain.updateActivityFromSchedule(this.level().environmentAttributes(), this.level().getLevelData().getGameTime(), this.position()); // Folia - region threading - not in the world yet
++        // Papercut start - Fix villager portal teleportation crash
++        // Don't update activity from schedule during entity construction/teleportation
++        // as it causes world mismatch errors in Folia region threading
++        if (this.inWorld) {
++            villagerBrain.updateActivityFromSchedule(this.level().environmentAttributes(), this.level().getLevelData().getGameTime(), this.position());
++        }
++        // Papercut end
+     }
+ 
+     @Override

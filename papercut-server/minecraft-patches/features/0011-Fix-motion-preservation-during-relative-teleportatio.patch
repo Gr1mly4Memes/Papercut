@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sat, 28 Feb 2026 20:58:04 -0800
+Subject: [PATCH] Fix motion preservation during relative teleportation
+
+
+diff --git a/net/minecraft/world/entity/PositionMoveRotation.java b/net/minecraft/world/entity/PositionMoveRotation.java
+index d6b79caac20863a4a8900e93652d493e3d9a6493..d5cc950f93374fc20fe6304195821a9b146e8186 100644
+--- a/net/minecraft/world/entity/PositionMoveRotation.java
++++ b/net/minecraft/world/entity/PositionMoveRotation.java
+@@ -62,7 +62,11 @@ public record PositionMoveRotation(Vec3 position, Vec3 deltaMovement, float yRot
+         return new PositionMoveRotation(vec3, vec32, f2, f3);
+     }
+ 
+-    private static double calculateDelta(double position, double deltaMovement, Set<Relative> relatives, Relative deltaRelative) {
+-        return relatives.contains(deltaRelative) ? position + deltaMovement : deltaMovement;
++    private static double calculateDelta(double currentVelocity, double deltaMovement, Set<Relative> relatives, Relative deltaRelative) {
++        // Papercut start - Fix motion preservation during relative teleportation
++        // When relative delta flag is NOT set, preserve current velocity
++        // When relative delta flag IS set, use the new delta movement
++        return relatives.contains(deltaRelative) ? deltaMovement : currentVelocity;
++        // Papercut end
+     }
+ }

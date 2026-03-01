@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sat, 28 Feb 2026 21:01:44 -0800
+Subject: [PATCH] Fix fishing bobber removal during dimension change
+
+
+diff --git a/net/minecraft/world/entity/projectile/FishingHook.java b/net/minecraft/world/entity/projectile/FishingHook.java
+index 134a26940e8dfb21be241d32b6e00b1d114b0ee7..4fb57def5af419a8e7e88a7719501a76cf4df687 100644
+--- a/net/minecraft/world/entity/projectile/FishingHook.java
++++ b/net/minecraft/world/entity/projectile/FishingHook.java
+@@ -271,9 +271,14 @@ public class FishingHook extends Projectile {
+ 
+     private boolean shouldStopFishing(Player player) {
+         // Folia start - region threading
+-        if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(player)) {
++        // Papercut start - Fix fishing bobber removal during dimension change
++        // Fishing hooks should persist even when owner is in different region/thread
++        // This allows stasis chambers and other redstone contraptions to work
++        // Only stop fishing if owner is removed or completely invalid
++        if (player.isRemoved()) {
+             return true;
+         }
++        // Papercut end - Fix fishing bobber removal during dimension change
+         // Folia end - region threading
+         if (player.canInteractWithLevel()) {
+             ItemStack mainHandItem = player.getMainHandItem();
