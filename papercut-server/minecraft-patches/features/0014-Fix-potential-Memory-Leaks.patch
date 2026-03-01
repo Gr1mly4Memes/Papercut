@@ -1,0 +1,117 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sun, 1 Mar 2026 10:29:17 -0800
+Subject: [PATCH] Fix potential Memory Leaks
+
+
+diff --git a/ca/spottedleaf/moonrise/patches/chunk_system/level/entity/server/ServerEntityLookup.java b/ca/spottedleaf/moonrise/patches/chunk_system/level/entity/server/ServerEntityLookup.java
+index ba9422cf2b95aa438c6da66b40f68adf0f7e82cb..3b90a5b88bf8ecf7e0be30b63ac18be3a68c8308 100644
+--- a/ca/spottedleaf/moonrise/patches/chunk_system/level/entity/server/ServerEntityLookup.java
++++ b/ca/spottedleaf/moonrise/patches/chunk_system/level/entity/server/ServerEntityLookup.java
+@@ -148,6 +148,10 @@ public final class ServerEntityLookup extends EntityLookup {
+         // Folia - region threading
+         ((ChunkSystemServerLevel)this.serverWorld).moonrise$getChunkTaskScheduler().chunkHolderManager
+             .addTicketAtLevel(ENDER_PEARL_TICKER, coordinate, ChunkHolderManager.ENTITY_TICKING_TICKET_LEVEL, Integer.valueOf(entityId)); // Folia - region threading
++        // Papercut start - Fix memory leak in enderPearlChunkCount
++        // Track ender pearl count to enable proper cleanup
++        this.enderPearlChunkCount.put(coordinate, this.enderPearlChunkCount.get(coordinate) + 1);
++        // Papercut end
+     }
+ 
+     private void removeEnderPearl(final long coordinate, final int entityId) { // Folia - region threading
+@@ -158,5 +162,15 @@ public final class ServerEntityLookup extends EntityLookup {
+         // Folia - region threading
+         ((ChunkSystemServerLevel)this.serverWorld).moonrise$getChunkTaskScheduler().chunkHolderManager
+             .removeTicketAtLevel(ENDER_PEARL_TICKER, coordinate, ChunkHolderManager.ENTITY_TICKING_TICKET_LEVEL, Integer.valueOf(entityId)); // Folia - region threading
++        
++        // Papercut start - Fix memory leak in enderPearlChunkCount
++        // Clean up the map entry when count reaches zero to prevent memory leak
++        int currentCount = this.enderPearlChunkCount.get(coordinate);
++        if (currentCount <= 1) {
++            this.enderPearlChunkCount.remove(coordinate);
++        } else {
++            this.enderPearlChunkCount.put(coordinate, currentCount - 1);
++        }
++        // Papercut end
+     }
+ }
+diff --git a/net/minecraft/server/network/ServerConnectionListener.java b/net/minecraft/server/network/ServerConnectionListener.java
+index 7f86b3538449616a7fa8423e86897364563af957..09b8b744e9ae6f1d89d1bc1e294ae5731ad64207 100644
+--- a/net/minecraft/server/network/ServerConnectionListener.java
++++ b/net/minecraft/server/network/ServerConnectionListener.java
+@@ -270,6 +270,25 @@ public class ServerConnectionListener {
+             this.jitter = jitter;
+         }
+ 
++        // Papercut start - Fix memory leak in LatencySimulator Timer
++        @Override
++        public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
++            super.handlerRemoved(ctx);
++            // Clear queued messages when handler is removed
++            this.queuedMessages.clear();
++        }
++        // Add shutdown hook to clean up static Timer
++        static {
++            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
++                try {
++                    TIMER.stop();
++                } catch (Exception e) {
++                    // Ignore exceptions during shutdown
++                }
++            }));
++        }
++        // Papercut end
++
+         @Override
+         public void channelRead(ChannelHandlerContext ctx, Object msg) {
+             this.delayDownstream(ctx, msg);
+diff --git a/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+index bdd3062d0e2cca647c749259c8d497d05f7fed86..97e5b4bf41fd2cbf2affd5d24b059c5ee3befeb5 100644
+--- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -859,6 +859,20 @@ public class ServerGamePacketListenerImpl
+     // Paper start - AsyncTabCompleteEvent
+     private static final java.util.concurrent.ExecutorService TAB_COMPLETE_EXECUTOR = java.util.concurrent.Executors.newFixedThreadPool(4,
+         new com.google.common.util.concurrent.ThreadFactoryBuilder().setDaemon(true).setNameFormat("Async Tab Complete Thread - #%d").setUncaughtExceptionHandler(new net.minecraft.DefaultUncaughtExceptionHandlerWithName(MinecraftServer.LOGGER)).build());
++    // Papercut start - Fix memory leak in TAB_COMPLETE_EXECUTOR
++    static {
++        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
++            try {
++                TAB_COMPLETE_EXECUTOR.shutdown();
++                if (!TAB_COMPLETE_EXECUTOR.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
++                    TAB_COMPLETE_EXECUTOR.shutdownNow();
++                }
++            } catch (InterruptedException e) {
++                Thread.currentThread().interrupt();
++            }
++        }));
++    }
++    // Papercut end
+     // Paper end - AsyncTabCompleteEvent
+ 
+     @Override
+diff --git a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+index 69f694995848173c2f3137aa8e9706be6fd3a9ae..ac69116a6f33a6a64880ecdc807c2eb5aa6f14fa 100644
+--- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
++++ b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+@@ -56,6 +56,20 @@ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener,
+     private static final AtomicInteger UNIQUE_THREAD_ID = new AtomicInteger(0);
+     static final Logger LOGGER = LogUtils.getLogger();
+     private static final java.util.concurrent.ExecutorService authenticatorPool = java.util.concurrent.Executors.newCachedThreadPool(new com.google.common.util.concurrent.ThreadFactoryBuilder().setNameFormat("User Authenticator #%d").setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER)).build()); // Paper - Cache authenticator threads
++    // Papercut start - Fix memory leak in authenticatorPool
++    static {
++        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
++            try {
++                authenticatorPool.shutdown();
++                if (!authenticatorPool.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS)) {
++                    authenticatorPool.shutdownNow();
++                }
++            } catch (InterruptedException e) {
++                Thread.currentThread().interrupt();
++            }
++        }));
++    }
++    // Papercut end
+     private static final int MAX_TICKS_BEFORE_LOGIN = 600;
+     private final byte[] challenge;
+     final MinecraftServer server;
