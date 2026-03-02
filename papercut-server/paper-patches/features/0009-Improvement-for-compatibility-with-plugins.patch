@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sun, 1 Mar 2026 18:03:54 -0800
+Subject: [PATCH] Improvement for compatibility with plugins
+
+
+diff --git a/src/main/java/io/papermc/paper/plugin/manager/PaperPluginInstanceManager.java b/src/main/java/io/papermc/paper/plugin/manager/PaperPluginInstanceManager.java
+index 633cbe5bc5c7ab2f952158d90c255efd78f2dac9..23b1b8e2b0178b176544d18dc69d598ba625a5fe 100644
+--- a/src/main/java/io/papermc/paper/plugin/manager/PaperPluginInstanceManager.java
++++ b/src/main/java/io/papermc/paper/plugin/manager/PaperPluginInstanceManager.java
+@@ -205,8 +205,12 @@ class PaperPluginInstanceManager {
+             } // Paper
+ 
+             try {
+-                // Ensure JavaPlugin#onEnable runs on the compat/plugin-main thread when compat is enabled
+-                if (CompatManager.instance().isEnabled() && !CompatManager.instance().isCompatThread()) {
++                // If the plugin declares/contains a Folia-compatible compat implementation, run it directly on the current thread
++                // (these plugins are expected to be aware of Folia's threading model). Otherwise, route legacy plugins through
++                // the CompatManager single-thread executor to emulate the old main thread.
++                if (isFoliaCompatPlugin(jPlugin)) {
++                    jPlugin.setEnabled(true);
++                } else if (CompatManager.instance().isEnabled() && !CompatManager.instance().isCompatThread()) {
+                     CompatManager.instance().submitAndWait(() -> jPlugin.setEnabled(true));
+                 } else {
+                     jPlugin.setEnabled(true);
+@@ -245,8 +249,10 @@ class PaperPluginInstanceManager {
+ 
+             this.server.getPluginManager().callEvent(new PluginDisableEvent(plugin));
+             try {
+-                // Ensure JavaPlugin#onDisable runs on the compat/plugin-main thread when compat is enabled
+-                if (CompatManager.instance().isEnabled() && !CompatManager.instance().isCompatThread()) {
++                // Mirror the enable logic: Folia-aware plugins should be disabled on the calling thread; legacy plugins via CompatManager
++                if (isFoliaCompatPlugin(javaPlugin)) {
++                    javaPlugin.setEnabled(false);
++                } else if (CompatManager.instance().isEnabled() && !CompatManager.instance().isCompatThread()) {
+                     CompatManager.instance().submitAndWait(() -> javaPlugin.setEnabled(false));
+                 } else {
+                     javaPlugin.setEnabled(false);
+@@ -337,6 +343,27 @@ class PaperPluginInstanceManager {
+ 
+     }
+ 
++    // Heuristic: detect known Folia-compatible plugin markers (e.g., Vivecraft's compat_impl class). If present,
++    // prefer running lifecycle methods directly on the current thread instead of routing through CompatManager.
++    private boolean isFoliaCompatPlugin(@NotNull JavaPlugin plugin) {
++        ClassLoader cl = plugin.getClass().getClassLoader();
++        if (cl == null) return false;
++        // Check for the common Vivecraft compat implementation class - this is a targeted heuristic for the problematic plugin.
++        try {
++            if (cl.getResource("org/vivecraft/compat_impl/FoliaScheduler.class") != null) return true;
++        } catch (Throwable ignored) {
++        }
++        // Fallback: attempt a conservative loadClass check (without initializing) for the same class-name. This is safe as
++        // we catch and ignore ClassNotFoundException.
++        try {
++            Class<?> c = Class.forName("org.vivecraft.compat_impl.FoliaScheduler", false, cl);
++            if (c != null) return true;
++        } catch (ClassNotFoundException ignored) {
++        } catch (Throwable ignored) {
++        }
++        return false;
++    }
++
+     private void handlePluginException(String msg, Throwable ex, Plugin plugin) {
+         Bukkit.getServer().getLogger().log(Level.SEVERE, msg, ex);
+         this.pluginManager.callEvent(new com.destroystokyo.paper.event.server.ServerExceptionEvent(new com.destroystokyo.paper.exception.ServerPluginEnableDisableException(msg, ex, plugin)));

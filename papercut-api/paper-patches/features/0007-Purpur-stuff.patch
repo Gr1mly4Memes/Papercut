@@ -1,0 +1,665 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sat, 7 Mar 2026 19:18:34 -0800
+Subject: [PATCH] Purpur stuff
+
+
+diff --git a/src/main/java/org/bukkit/Bukkit.java b/src/main/java/org/bukkit/Bukkit.java
+index b9d34c0b80a5d0c26f43e4959c3a8256a854585a..c04749aa0ea7f47359ce457408f9a89865655e0b 100644
+--- a/src/main/java/org/bukkit/Bukkit.java
++++ b/src/main/java/org/bukkit/Bukkit.java
+@@ -3039,4 +3039,139 @@ public final class Bukkit {
+     public static void restart() {
+         server.restart();
+     }
++
++    // Purpur start - Bring back server name
++     /**
++     * Get the name of this server
++     * @return the name of the server
++     */
++@NotNull
++    public static String getServerName() {
++            return server.getServerName();
++        }
++    // Purpur end - Bring back server name
++
++    // Purpur start - Lagging threshold
++    /**
++     * Check if server is lagging according to laggy threshold setting
++     *
++     * @return True if lagging
++     */
++        public static boolean isLagging() {
++            return server.isLagging();
++        }
++    // Purpur end - Lagging threshold
++
++    // Purpur start - Added the ability to add combustible items
++    /**
++     * Add an Item as fuel for furnaces
++     *
++     * @param material The material that will be the fuel
++     * @param burnTime The time (in ticks) this item will burn for
++     */
++        public static void addFuel(@NotNull Material material, int burnTime) {
++            server.addFuel(material, burnTime);
++        }
++    /**
++     * Remove an item as fuel for furnaces
++     *
++     * @param material The material that will no longer be a fuel
++     */
++        public static void removeFuel(@NotNull Material material) {
++            server.removeFuel(material);
++        }
++    // Purpur end - Added the ability to add combustible items
++
++    // Purpur start - Debug Marker API
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on the server.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @deprecated until further notice. NOOP since 1.21.10
++      */
++        @Deprecated
++    public static void sendBlockHighlight(@NotNull Location location, int duration) {
++            server.sendBlockHighlight(location, duration);
++        }
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on the server.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @param argb Color of the highlight. ARGB int. Will be ignored on some versions of vanilla client
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++        @Deprecated
++    public static void sendBlockHighlight(@NotNull Location location, int duration, int argb) {
++            server.sendBlockHighlight(location, duration, argb);
++        }
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on the server.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @param text Text to show above the highlight
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++        @Deprecated
++    public static void sendBlockHighlight(@NotNull Location location, int duration, @NotNull String text) {
++            server.sendBlockHighlight(location, duration, text);
++        }
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on the server.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds* @param text Text to show above the highlight
++     * @param argb Color of the highlight. ARGB int. Will be ignored on some versions of vanilla client
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++        @Deprecated
++    public static void sendBlockHighlight(@NotNull Location location, int duration, @NotNull String text, int argb) {
++            server.sendBlockHighlight(location, duration, text, argb);
++        }
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on the server.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @param color Color of the highlight. Will be ignored on some versions of vanilla client
++     * @param transparency Transparency of the highlight
++     * @throws IllegalArgumentException If transparency is outside 0-255 range
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++        @Deprecated
++    public static void sendBlockHighlight(@NotNull Location location, int duration, @NotNull org.bukkit.Color color, int transparency) {
++            server.sendBlockHighlight(location, duration, color, transparency);
++        }
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on the server.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @param text Text to show above the highlight
++     * @param color Color of the highlight. Will be ignored on some versions of vanilla client
++     * @param transparency Transparency of the highlight
++     * @throws IllegalArgumentException If transparency is outside 0-255 range
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++        @Deprecated
++    public static void sendBlockHighlight(@NotNull Location location, int duration, @NotNull String text, @NotNull org.bukkit.Color color, int transparency) {
++            server.sendBlockHighlight(location, duration, text, color, transparency);
++        }
++    /**
++     * Clears all debug block highlights for all players on the server.
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++        @Deprecated
++    public static void clearBlockHighlights() {
++            server.clearBlockHighlights();
++        }
++    // Purpur end - Debug Marker API
+ }
+diff --git a/src/main/java/org/bukkit/ChatColor.java b/src/main/java/org/bukkit/ChatColor.java
+index 918a045165cdcde264bc24082b7afebb407271de..7b6eb6b877bb85a525ebb942cb7a0ab8df99b5e7 100644
+--- a/src/main/java/org/bukkit/ChatColor.java
++++ b/src/main/java/org/bukkit/ChatColor.java
+@@ -456,4 +456,72 @@ public enum ChatColor {
+             BY_CHAR.put(color.code, color);
+         }
+     }
++
++    // Purpur start - ChatColor conveniences
++    /**
++     * Convert legacy string into a string ready to be parsed by MiniMessage
++     *
++     * @param str Legacy string
++     * @return MiniMessage ready string
++     */
++    @NotNull
++    public static String toMM(@NotNull String str) {
++        StringBuilder sb = new StringBuilder(str);
++        java.util.regex.Matcher m = STRIP_COLOR_PATTERN.matcher(sb);
++        while (m.find()) {
++            sb.replace(m.start(), m.end(), sb.substring(m.start(), m.end()).toLowerCase());
++        }
++        return sb.toString()
++                .replace("&0", "<black>")
++                .replace("&1", "<dark_blue>")
++                .replace("&2", "<dark_green>")
++                .replace("&3", "<dark_aqua>")
++                .replace("&4", "<dark_red>")
++                .replace("&5", "<dark_purple>")
++                .replace("&6", "<gold>")
++                .replace("&7", "<grey>")
++                .replace("&8", "<dark_grey>")
++                .replace("&9", "<blue>")
++                .replace("&a", "<green>")
++                .replace("&b", "<aqua>")
++                .replace("&c", "<red>")
++                .replace("&d", "<light_purple>")
++                .replace("&e", "<yellow>")
++                .replace("&f", "<white>")
++                .replace("&k", "<obf>")
++                .replace("&l", "<b>")
++                .replace("&m", "<st>")
++                .replace("&n", "<u>")
++                .replace("&o", "<i>")
++                .replace("&r", "<r>");
++    }
++    @NotNull
++    public static net.kyori.adventure.text.Component parseMM(@NotNull String string, @Nullable Object... args) {
++        return net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(String.format(string, args));
++    }
++    @Deprecated
++    public static final Pattern HEX_PATTERN = Pattern.compile("(#[A-Fa-f0-9]{6})");
++    @Deprecated
++    @Nullable
++    public static String replaceHex(@Nullable String str) {
++        if (str != null) {
++            java.util.regex.Matcher matcher = HEX_PATTERN.matcher(str);
++            while (matcher.find()) {
++                String group = matcher.group(1);
++                str = str.replace(group, net.md_5.bungee.api.ChatColor.of(group).toString());
++            }
++        }
++        return str;
++    }
++    @Deprecated
++    @Nullable
++    public static String color(@Nullable String str) {
++        return color(str, true);
++    }
++    @Deprecated
++    @Nullable
++    public static String color(@Nullable String str, boolean parseHex) {
++        return str != null ? net.md_5.bungee.api.ChatColor.translateAlternateColorCodes('&', parseHex ? replaceHex(str) : str) : str;
++    }
++    // Purpur end - ChatColor conveniences
+ }
+diff --git a/src/main/java/org/bukkit/Material.java b/src/main/java/org/bukkit/Material.java
+index 8e663e2edc0ff1c1ddc2b648ad95dcd189972ee2..2a77a21d24270eface6e62ef5fe2d3226b4fde0a 100644
+--- a/src/main/java/org/bukkit/Material.java
++++ b/src/main/java/org/bukkit/Material.java
+@@ -3703,4 +3703,40 @@ public enum Material implements Keyed, Translatable, net.kyori.adventure.transla
+         return this.asItemType().getDefaultDataTypes();
+     }
+     // Paper end - data component API
++
++    // Purpur start - ItemStack convenience methods
++    public boolean isArmor() {
++        switch (this) {
++            // <editor-fold defaultstate="collapsed" desc="isarmor">
++            case LEATHER_BOOTS:
++                case LEATHER_CHESTPLATE:
++                    case LEATHER_HELMET:
++                        case LEATHER_LEGGINGS:
++                            case CHAINMAIL_BOOTS:
++                    case CHAINMAIL_CHESTPLATE:
++                        case CHAINMAIL_HELMET:
++                            case CHAINMAIL_LEGGINGS:
++                            case IRON_BOOTS:
++                            case IRON_CHESTPLATE:
++                            case IRON_HELMET:
++                            case IRON_LEGGINGS:
++                            case GOLDEN_BOOTS:
++                            case GOLDEN_CHESTPLATE:
++                            case GOLDEN_HELMET:
++                            case GOLDEN_LEGGINGS:
++                            case DIAMOND_BOOTS:
++                            case DIAMOND_CHESTPLATE:
++                            case DIAMOND_HELMET:
++                            case DIAMOND_LEGGINGS:
++                            case NETHERITE_BOOTS:
++                            case NETHERITE_CHESTPLATE:
++                            case NETHERITE_HELMET:
++                            case NETHERITE_LEGGINGS:
++                            case TURTLE_HELMET:
++                                return true;
++                        default:
++                            return false;
++        }
++    }
++    // Purpur end - ItemStack convenience methods
+ }
+diff --git a/src/main/java/org/bukkit/OfflinePlayer.java b/src/main/java/org/bukkit/OfflinePlayer.java
+index 13ec9ea1ee08dc97cd2b9d740ad8394cd2ca90fe..ff7702b125d79ec76e8aebc0ff8de7173551094c 100644
+--- a/src/main/java/org/bukkit/OfflinePlayer.java
++++ b/src/main/java/org/bukkit/OfflinePlayer.java
+@@ -591,4 +591,93 @@ public interface OfflinePlayer extends ServerOperator, AnimalTamer, Configuratio
+     default void applySkinToPlayerHeadContents(final PlayerHeadObjectContents.Builder builder) {
+         builder.skin(this.getPlayerProfile());
+     }
++
++    // Purpur start - OfflinePlayer API
++    /**
++     * Determines if the OfflinePlayer is allowed to fly via jump key double-tap like
++     * in creative mode.
++     *
++     * @return True if the player is allowed to fly.
++     */
++    boolean getAllowFlight();
++    /**
++     * Sets if the OfflinePlayer is allowed to fly via jump key double-tap like in
++     * creative mode.
++     *
++     * @param flight If flight should be allowed.
++     */
++    void setAllowFlight(boolean flight);
++    /**
++     * Checks to see if this player is currently flying or not.
++     *
++     * @return True if the player is flying, else false.
++     */
++    boolean isFlying();
++    /**
++     * Makes this player start or stop flying.
++     *
++     * @param value True to fly.
++     */
++    void setFlying(boolean value);
++    /**
++     * Sets the speed at which a client will fly. Negative values indicate
++     * reverse directions.
++     *
++     * @param value The new speed, from -1 to 1.
++     * @throws IllegalArgumentException If new speed is less than -1 or
++     *     greater than 1
++     */
++    void setFlySpeed(float value) throws IllegalArgumentException;
++    /**
++     * Sets the speed at which a client will walk. Negative values indicate
++     * reverse directions.
++     *
++     * @param value The new speed, from -1 to 1.
++     * @throws IllegalArgumentException If new speed is less than -1 or
++     *     greater than 1
++     */
++    void setWalkSpeed(float value) throws IllegalArgumentException;
++    /**
++     * Gets the current allowed speed that a client can fly.
++     *
++     * @return The current allowed speed, from -1 to 1
++     */
++    float getFlySpeed();
++    /**
++     * Gets the current allowed speed that a client can walk.
++     *
++     * @return The current allowed speed, from -1 to 1
++     */
++    float getWalkSpeed();
++    /**
++     * Sets OfflinePlayer's location. If player is online, it falls back to the Player#teleport implementation.
++     *
++     * @param destination
++     * @return true if teleportation was successful
++     */
++    boolean teleportOffline(org.bukkit.Location destination);
++    /**
++     * Sets OfflinePlayer's location. If player is online, it falls back to the Player#teleport implementation.
++     *
++     * @param destination
++     * @param cause Teleport cause used if player is online
++     * @return true if teleportation was successful
++     */
++    boolean teleportOffline(org.bukkit.Location destination, org.bukkit.event.player.PlayerTeleportEvent.TeleportCause cause);
++    /**
++     * Sets OfflinePlayer's location. If player is online, it falls back to the Player#teleportAsync implementation.
++     *
++     * @param destination
++     * @return <code>true</code> if teleportation successful
++     */
++    java.util.concurrent.CompletableFuture<Boolean> teleportOfflineAsync(Location destination);
++    /**
++     * Sets OfflinePlayer's location. If player is online, it falls back to the Player#teleportAsync implementation.
++     *
++     * @param destination
++     * @param cause Teleport cause used if player is online
++     * @return <code>true</code> if teleportation successful
++     */
++    java.util.concurrent.CompletableFuture<Boolean> teleportOfflineAsync(Location destination, org.bukkit.event.player.PlayerTeleportEvent.TeleportCause cause);
++    // Purpur end - OfflinePlayer API
+ }
+diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
+index ca0048ed5672e7edbe047572cb09be86421bf1e4..bc5ea209a76be65a05158f3f5bc3b45bfbb2989f 100644
+--- a/src/main/java/org/bukkit/Server.java
++++ b/src/main/java/org/bukkit/Server.java
+@@ -2772,6 +2772,120 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+      */
+     void allowPausing(@NotNull org.bukkit.plugin.Plugin plugin, boolean value);
+     // Paper end - API to check if the server is sleeping
++
++    // Purpur start - Bring back server name
++    /**
++     * Get the name of this server
++     * @return the name of the server
++     */
++    @NotNull
++    String getServerName();
++    // Purpur end - Bring back server name
++
++    // Purpur start - Lagging threshold
++    /**
++     * Check if server is lagging according to laggy threshold setting
++     *
++     * @return True if lagging
++     */
++    boolean isLagging();
++    // Purpur end - Lagging threshold
++
++    // Purpur start - Added the ability to add combustible items
++    /**
++     * Add an Item as fuel for furnaces
++     *
++     * @param material The material that will be the fuel
++     * @param burnTime The time (in ticks) this item will burn for
++     */
++    public void addFuel(@NotNull Material material, int burnTime);
++    /**
++     * Remove an item as fuel for furnaces
++     *
++     * @param material The material that will no longer be a fuel
++     */
++    public void removeFuel(@NotNull Material material);
++    // Purpur end - Added the ability to add combustible items
++
++    // Purpur start - Debug Marker API
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on the server.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++    @Deprecated
++    void sendBlockHighlight(@NotNull Location location, int duration);
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on the server.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @param argb Color of the highlight. ARGB int. Will be ignored on some versions of vanilla client
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++    @Deprecated
++    void sendBlockHighlight(@NotNull Location location, int duration, int argb);
++            /**
++      * Creates debug block highlight on specified block location and show it to all players on the server.
++      * <p>
++      * Clients may be inconsistent in displaying it.
++      * @param location Location to highlight
++      * @param duration Duration for highlight to show in milliseconds
++      * @param text Text to show above the highlight
++      * @deprecated until further notice. NOOP since 1.21.10
++      */
++            @Deprecated
++    void sendBlockHighlight(@NotNull Location location, int duration, @NotNull String text);
++            /**
++      * Creates debug block highlight on specified block location and show it to all players on the server.
++      * <p>
++      * Clients may be inconsistent in displaying it.
++      * @param location Location to highlight
++      * @param duration Duration for highlight to show in milliseconds
++      * @param text Text to show above the highlight
++      * @param argb Color of the highlight. ARGB int. Will be ignored on some versions of vanilla client
++      * @deprecated until further notice. NOOP since 1.21.10
++      */
++            @Deprecated
++    void sendBlockHighlight(@NotNull Location location, int duration, @NotNull String text, int argb);
++            /**
++      * Creates debug block highlight on specified block location and show it to all players on the server.
++      * <p>
++      * Clients may be inconsistent in displaying it.
++      * @param location Location to highlight
++      * @param duration Duration for highlight to show in milliseconds
++      * @param color Color of the highlight. Will be ignored on some versions of vanilla client
++      * @param transparency Transparency of the highlight
++      * @throws IllegalArgumentException If transparency is outside 0-255 range
++      * @deprecated until further notice. NOOP since 1.21.10
++      */
++            @Deprecated
++    void sendBlockHighlight(@NotNull Location location, int duration, @NotNull org.bukkit.Color color, int transparency);
++            /**
++      * Creates debug block highlight on specified block location and show it to all players on the server.
++      * <p>
++      * Clients may be inconsistent in displaying it.
++      * @param location Location to highlight
++      * @param duration Duration for highlight to show in milliseconds
++      * @param text Text to show above the highlight
++      * @param color Color of the highlight. Will be ignored on some versions of vanilla client
++      * @param transparency Transparency of the highlight
++      * @throws IllegalArgumentException If transparency is outside 0-255 range
++      * @deprecated until further notice. NOOP since 1.21.10
++      */
++            @Deprecated
++    void sendBlockHighlight(@NotNull Location location, int duration, @NotNull String text, @NotNull org.bukkit.Color color, int transparency);
++            /**
++      * Clears all debug block highlights for all players on the server.
++      * @deprecated until further notice. NOOP since 1.21.10
++      */
++            @Deprecated
++    void clearBlockHighlights();
++    // Purpur end - Debug Marker API
+     // Folia start - region TPS API
+     /**
+      * Gets the TPS from the region which owns the specified location, or {@code null} if no region owns
+diff --git a/src/main/java/org/bukkit/World.java b/src/main/java/org/bukkit/World.java
+index b202bdb84bae23f7b2b5af591879a032f6378a25..5fb9361cd90d948976c232a9ed1e0bf030a09c76 100644
+--- a/src/main/java/org/bukkit/World.java
++++ b/src/main/java/org/bukkit/World.java
+@@ -4465,6 +4465,93 @@ public interface World extends RegionAccessor, WorldInfo, PluginMessageRecipient
+     @Nullable
+     public DragonBattle getEnderDragonBattle();
+ 
++    // Purpur start
++    /**
++     * Gets the local difficulty (based on inhabited time) at a location
++     *
++     * @param location Location to check
++     * @return The local difficulty
++     */
++    public float getLocalDifficultyAt(@NotNull Location location);
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on this world.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++    @Deprecated
++    void sendBlockHighlight(@NotNull Location location, int duration);
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on this world.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @param argb Color of the highlight. ARGB int. Will be ignored on some versions of vanilla client
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++    @Deprecated
++    void sendBlockHighlight(@NotNull Location location, int duration, int argb);
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on this world.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @param text Text to show above the highlight
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++    @Deprecated
++    void sendBlockHighlight(@NotNull Location location, int duration, @NotNull String text);
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on this world.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @param text Text to show above the highlight
++     * @param argb Color of the highlight. ARGB int. Will be ignored on some versions of vanilla client
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++    @Deprecated
++    void sendBlockHighlight(@NotNull Location location, int duration, @NotNull String text, int argb);
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on this world.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @param color Color of the highlight. Will be ignored on some versions of vanilla client
++     * @param transparency Transparency of the highlight
++     * @throws IllegalArgumentException If transparency is outside 0-255 range
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++    @Deprecated
++    void sendBlockHighlight(@NotNull Location location, int duration, @NotNull org.bukkit.Color color, int transparency);
++    /**
++     * Creates debug block highlight on specified block location and show it to all players on this world.
++     * <p>
++     * Clients may be inconsistent in displaying it.
++     * @param location Location to highlight
++     * @param duration Duration for highlight to show in milliseconds
++     * @param text Text to show above the highlight
++     * @param color Color of the highlight. Will be ignored on some versions of vanilla client
++     * @param transparency Transparency of the highlight
++     * @throws IllegalArgumentException If transparency is outside 0-255 range
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++    @Deprecated
++    void sendBlockHighlight(@NotNull Location location, int duration, @NotNull String text, @NotNull org.bukkit.Color color, int transparency);
++    /**
++     * Clears all debug block highlights for all players on this world.
++     * @deprecated until further notice. NOOP since 1.21.10
++     */
++    @Deprecated
++    void clearBlockHighlights();
++    // Purpur end
++
+     /**
+      * Get all {@link FeatureFlag} enabled in this world.
+      *
+diff --git a/src/main/java/org/bukkit/util/permissions/DefaultPermissions.java b/src/main/java/org/bukkit/util/permissions/DefaultPermissions.java
+index e1a4ddf2c07cdd242fa8054a0152522fe4039e85..5329de48a739cafac98514e24edaf5f1b9d41fff 100644
+--- a/src/main/java/org/bukkit/util/permissions/DefaultPermissions.java
++++ b/src/main/java/org/bukkit/util/permissions/DefaultPermissions.java
+@@ -31,7 +31,7 @@ public final class DefaultPermissions {
+ 
+         if (withLegacy) {
+             Permission legacy = new Permission(LEGACY_PREFIX + result.getName(), result.getDescription(), PermissionDefault.FALSE);
+-            legacy.getChildren().put(result.getName(), true);
++            legacy.getChildren().put(result.getName(), null); // Purpur - Fix default permission system
+             registerPermission(perm, false);
+         }
+ 
+@@ -40,7 +40,7 @@ public final class DefaultPermissions {
+ 
+     @NotNull
+     public static Permission registerPermission(@NotNull Permission perm, @NotNull Permission parent) {
+-        parent.getChildren().put(perm.getName(), true);
++        parent.getChildren().put(perm.getName(), null); // Purpur - Fix default permission system
+         return registerPermission(perm);
+     }
+ 
+@@ -53,7 +53,7 @@ public final class DefaultPermissions {
+     @NotNull
+     public static Permission registerPermission(@NotNull String name, @Nullable String desc, @NotNull Permission parent) {
+         Permission perm = registerPermission(name, desc);
+-        parent.getChildren().put(perm.getName(), true);
++        parent.getChildren().put(perm.getName(), null); // Purpur - Fix default permission system
+         return perm;
+     }
+ 
+@@ -66,7 +66,7 @@ public final class DefaultPermissions {
+     @NotNull
+     public static Permission registerPermission(@NotNull String name, @Nullable String desc, @Nullable PermissionDefault def, @NotNull Permission parent) {
+         Permission perm = registerPermission(name, desc, def);
+-        parent.getChildren().put(perm.getName(), true);
++        parent.getChildren().put(perm.getName(), null); // Purpur - Fix default permission system
+         return perm;
+     }
+ 
+@@ -79,7 +79,7 @@ public final class DefaultPermissions {
+     @NotNull
+     public static Permission registerPermission(@NotNull String name, @Nullable String desc, @Nullable PermissionDefault def, @Nullable Map<String, Boolean> children, @NotNull Permission parent) {
+         Permission perm = registerPermission(name, desc, def, children);
+-        parent.getChildren().put(perm.getName(), true);
++        parent.getChildren().put(perm.getName(), null); // Purpur - Fix default permission system
+         return perm;
+     }
+ 
+@@ -89,6 +89,8 @@ public final class DefaultPermissions {
+         CommandPermissions.registerPermissions(parent);
+         BroadcastPermissions.registerPermissions(parent);
+ 
++        org.purpurmc.purpur.util.permissions.PurpurPermissions.registerPermissions(); // Purpur - Default permissions
++
+         parent.recalculatePermissibles();
+     }
+ }
+diff --git a/src/main/java/org/spigotmc/CustomTimingsHandler.java b/src/main/java/org/spigotmc/CustomTimingsHandler.java
+index 5fbacfcf108432c5187aa9a4092d00d7d5b0fd53..b4249da3eb26eae26ec000cc4d56cd21ac2fc6d5 100644
+--- a/src/main/java/org/spigotmc/CustomTimingsHandler.java
++++ b/src/main/java/org/spigotmc/CustomTimingsHandler.java
+@@ -61,7 +61,7 @@ public final class CustomTimingsHandler {
+         handler = timing;
+     }
+ 
+-    public void startTiming() { handler.startTiming(); }
+-    public void stopTiming() { handler.stopTiming(); }
++    public void startTiming() { /*handler.startTiming();*/ } // Purpur - Remove Timings
++    public void stopTiming() { /*handler.stopTiming();*/ } // Purpur - Remove Timings
+ 
+ }
