@@ -1,0 +1,190 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sat, 14 Mar 2026 10:55:08 -0700
+Subject: [PATCH] FerriteCore inspiration
+
+
+diff --git a/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/task/ChunkLoadTask.java b/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/task/ChunkLoadTask.java
+index 7463cf5bf871033a0e5f6d54dd0d427c474d7cd4..ee8e7fdc0e025993c18479b228e75e81e61c27e2 100644
+--- a/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/task/ChunkLoadTask.java
++++ b/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/task/ChunkLoadTask.java
+@@ -11,7 +11,6 @@ import ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO;
+ import ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk;
+ import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler;
+ import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder;
+-import net.minecraft.core.registries.Registries;
+ import net.minecraft.nbt.CompoundTag;
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.world.level.ChunkPos;
+@@ -20,6 +19,7 @@ import net.minecraft.world.level.chunk.ProtoChunk;
+ import net.minecraft.world.level.chunk.UpgradeData;
+ import net.minecraft.world.level.chunk.status.ChunkStatus;
+ import net.minecraft.world.level.chunk.storage.SerializableChunkData;
++import gr1mly4memes.papercut.optimizations.OptimizedChunkNBT; // Papercut - optimized NBT
+ import net.minecraft.world.level.levelgen.blending.BlendingData;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+@@ -339,13 +339,16 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
+             }
+ 
+             try {
+-                // run converters
++                // Papercut start - optimized NBT for partially loaded chunks
++                // Create optimized NBT that only contains essential data for second loading step
+                 final CompoundTag converted = this.world.getChunkSource().chunkMap.upgradeChunkTag(data);
+-
+-                // unpack the data
++                final CompoundTag optimizedNBT = OptimizedChunkNBT.createOptimizedPartialNBT(converted);
++                
++                // unpack the data using optimized NBT
+                 final SerializableChunkData chunkData = SerializableChunkData.parse(
+-                    this.world, this.world.palettedContainerFactory(), converted
++                    this.world, this.world.palettedContainerFactory(), optimizedNBT
+                 );
++                // Papercut end - optimized NBT
+ 
+                 if (chunkData == null) {
+                     LOGGER.error("Deserialized chunk for task: " + this.toString() + " produced null, chunk data will be lost?");
+diff --git a/net/minecraft/world/level/block/state/BlockBehaviour.java b/net/minecraft/world/level/block/state/BlockBehaviour.java
+index 61e811be743a0b0a45225af58cabef15696f4843..65a96a034975d3aa89f01fcf1b50ce536298b543 100644
+--- a/net/minecraft/world/level/block/state/BlockBehaviour.java
++++ b/net/minecraft/world/level/block/state/BlockBehaviour.java
+@@ -3,6 +3,7 @@ package net.minecraft.world.level.block.state;
+ import com.mojang.serialization.Codec;
+ import com.mojang.serialization.MapCodec;
+ import com.mojang.serialization.codecs.RecordCodecBuilder;
++import gr1mly4memes.papercut.optimizations.CacheDeduplicator;
+ import it.unimi.dsi.fastutil.objects.Reference2ObjectArrayMap;
+ import java.util.Arrays;
+ import java.util.Collections;
+@@ -588,7 +589,9 @@ public abstract class BlockBehaviour implements FeatureElement {
+             this.fluidState = this.owner.getFluidState(this.asState());
+             this.isRandomlyTicking = this.owner.isRandomlyTicking(this.asState());
+             if (!this.getBlock().hasDynamicShape()) {
+-                this.cache = new BlockBehaviour.BlockStateBase.Cache(this.asState());
++                // Papercut start - cache deduplication
++                this.cache = CacheDeduplicator.getOrCreateCache(this.asState());
++                // Papercut end - cache deduplication
+             }
+             this.shapeExceedsCube = this.cache == null || this.cache.largeCollisionShape; // Paper - moved from actual method to here
+ 
+@@ -1064,15 +1067,15 @@ public abstract class BlockBehaviour implements FeatureElement {
+             return this.instrument;
+         }
+ 
+-        static final class Cache {
++        public static final class Cache {
+             private static final Direction[] DIRECTIONS = Direction.values();
+             private static final int SUPPORT_TYPE_COUNT = SupportType.values().length;
+-            protected final VoxelShape collisionShape;
+-            protected final boolean largeCollisionShape;
++            public final VoxelShape collisionShape;
++            public final boolean largeCollisionShape;
+             private final boolean[] faceSturdy;
+-            protected final boolean isCollisionShapeFullBlock;
++            public final boolean isCollisionShapeFullBlock;
+ 
+-            Cache(BlockState state) {
++            public Cache(BlockState state) {
+                 Block block = state.getBlock();
+                 this.collisionShape = block.getCollisionShape(state, EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty());
+                 if (!this.collisionShape.isEmpty() && state.hasOffsetFunction()) {
+diff --git a/net/minecraft/world/level/block/state/StateHolder.java b/net/minecraft/world/level/block/state/StateHolder.java
+index c020d1944a25e2cd247e30a97c35bf93731d694a..f2cf6bda8f7b664123799cce0d0ecd1d18b4ec98 100644
+--- a/net/minecraft/world/level/block/state/StateHolder.java
++++ b/net/minecraft/world/level/block/state/StateHolder.java
+@@ -2,9 +2,10 @@ package net.minecraft.world.level.block.state;
+ 
+ import com.mojang.serialization.Codec;
+ import com.mojang.serialization.MapCodec;
++import gr1mly4memes.papercut.optimizations.FastMap;
++import gr1mly4memes.papercut.optimizations.OptimizedPropertyMap;
+ import it.unimi.dsi.fastutil.objects.Reference2ObjectArrayMap;
+ import java.util.Collection;
+-import java.util.Collections;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.Objects;
+@@ -35,7 +36,9 @@ public abstract class StateHolder<O, S> implements ca.spottedleaf.moonrise.patch
+     };
+     protected final O owner;
+     private Reference2ObjectArrayMap<Property<?>, Comparable<?>> values; // Paper - optimise blockstate property access - remove final
++    private OptimizedPropertyMap optimizedValues; // Papercut - optimized property storage
+     private Map<Property<?>, S[]> neighbours;
++    private FastMap<S> fastMap; // Papercut - FastMap optimization
+     protected final MapCodec<S> propertiesCodec;
+ 
+     // Paper start - optimise blockstate property access
+@@ -51,6 +54,7 @@ public abstract class StateHolder<O, S> implements ca.spottedleaf.moonrise.patch
+     protected StateHolder(O owner, Reference2ObjectArrayMap<Property<?>, Comparable<?>> values, MapCodec<S> propertiesCodec) {
+         this.owner = owner;
+         this.values = values;
++        this.optimizedValues = new OptimizedPropertyMap(values); // Papercut - optimized property storage
+         this.propertiesCodec = propertiesCodec;
+         // Paper start - optimise blockstate property access
+         this.optimisedTable = new ca.spottedleaf.moonrise.patches.blockstate_propertyaccess.util.ZeroCollidingReferenceStateTable<>(this.values.keySet());
+@@ -147,6 +151,15 @@ public abstract class StateHolder<O, S> implements ca.spottedleaf.moonrise.patch
+         if (comparable.equals(value)) {
+             return (S)this;
+         } else {
++            // Papercut start - FastMap optimization
++            if (this.fastMap != null) {
++                S neighbor = this.fastMap.getNeighbor((S)this, property, value);
++                if (neighbor != null) {
++                    return neighbor;
++                }
++            }
++            // Papercut end - FastMap optimization
++            
+             int internalIndex = property.getInternalIndex((T)value);
+             if (internalIndex < 0) {
+                 throw new IllegalArgumentException("Cannot set property " + property + " to " + value + " on " + this.owner + ", it is not an allowed value");
+@@ -164,6 +177,20 @@ public abstract class StateHolder<O, S> implements ca.spottedleaf.moonrise.patch
+         }
+         this.optimisedTable.loadInTable(map);
+ 
++        // Papercut start - FastMap optimization
++        // Initialize FastMap for efficient neighbor lookup
++        if (!map.isEmpty()) {
++            S firstState = map.values().iterator().next();
++            List<Property<?>> properties = List.copyOf(((StateHolder<?, ?>) firstState).getProperties());
++            this.fastMap = new FastMap<>(map, properties);
++            
++            // Share the same FastMap instance across all states
++            for (S state : map.values()) {
++                ((StateHolder<O, S>) state).fastMap = this.fastMap;
++            }
++        }
++        // Papercut end - FastMap optimization
++
+         // de-duplicate the tables
+         for (final Map.Entry<Map<Property<?>, Comparable<?>>, S> entry : map.entrySet()) {
+             final S value = entry.getValue();
+@@ -174,6 +201,7 @@ public abstract class StateHolder<O, S> implements ca.spottedleaf.moonrise.patch
+         for (final Map.Entry<Map<Property<?>, Comparable<?>>, S> entry : map.entrySet()) {
+             final S value = entry.getValue();
+             ((StateHolder<O, S>)value).values = null;
++            ((StateHolder<O, S>)value).optimizedValues = null; // Papercut - optimized property storage
+         }
+ 
+         return;
+@@ -190,7 +218,18 @@ public abstract class StateHolder<O, S> implements ca.spottedleaf.moonrise.patch
+         // Paper start - optimise blockstate property access
+         ca.spottedleaf.moonrise.patches.blockstate_propertyaccess.util.ZeroCollidingReferenceStateTable<O, S> table = this.optimisedTable;
+         // We have to use this.values until the table is loaded
+-        return table.isLoaded() ? table.getMapView(this.tableIndex) : this.values;
++        if (table.isLoaded()) {
++            return table.getMapView(this.tableIndex);
++        }
++        // Papercut start - optimized property storage
++        if (this.optimizedValues != null) {
++            return this.optimizedValues.entrySet().stream()
++                .collect(Reference2ObjectArrayMap::new, 
++                    (map, entry) -> map.put(entry.getKey(), entry.getValue()),
++                    Reference2ObjectArrayMap::putAll);
++        }
++        // Papercut end - optimized property storage
++        return this.values;
+         // Paper end - optimise blockstate property access
+     }
+ 
