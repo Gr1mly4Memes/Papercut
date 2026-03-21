@@ -1,0 +1,111 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Gr1mly4Memes <alagozantoni14@gmail.com>
+Date: Sat, 21 Mar 2026 13:50:43 -0700
+Subject: [PATCH] more memory optimizations
+
+
+diff --git a/net/minecraft/world/entity/monster/EnderMan.java b/net/minecraft/world/entity/monster/EnderMan.java
+index 645d121b456c5b211b06296e716e5ac6724d1135..2c8729663d491f2f70e9512c488ae5ab8696f965 100644
+--- a/net/minecraft/world/entity/monster/EnderMan.java
++++ b/net/minecraft/world/entity/monster/EnderMan.java
+@@ -298,19 +298,22 @@ public class EnderMan extends Monster implements NeutralMob {
+     }
+ 
+     private boolean teleport(double x, double y, double z) {
+-        BlockPos.MutableBlockPos mutableBlockPos = new BlockPos.MutableBlockPos(x, y, z);
++        int ix = Mth.floor(x);
++        int iy = Mth.floor(y);
++        int iz = Mth.floor(z);
+ 
+         // Pufferfish start - single chunk lookup
+-        net.minecraft.world.level.chunk.LevelChunk chunk = this.level().getChunkIfLoaded(mutableBlockPos);
++        net.minecraft.world.level.chunk.LevelChunk chunk = this.level().getChunkIfLoaded(ix >> 4, iz >> 4);
+         if (chunk == null) {
+             return false;
+         }
+         // Pufferfish end
+-        while (mutableBlockPos.getY() > this.level().getMinY() && !chunk.getBlockState(mutableBlockPos).blocksMotion()) { // Pufferfish
+-            mutableBlockPos.move(Direction.DOWN);
++        final int minY = this.level().getMinY();
++        while (iy > minY && !chunk.getBlockState(ix, iy, iz).blocksMotion()) { // Pufferfish
++            iy--;
+         }
+ 
+-        BlockState blockState = chunk.getBlockState(mutableBlockPos); // Pufferfish
++        BlockState blockState = chunk.getBlockState(ix, iy, iz); // Pufferfish
+         boolean flag = blockState.blocksMotion();
+         boolean isWater = blockState.getFluidState().is(FluidTags.WATER);
+         if (flag && !isWater) {
+diff --git a/net/minecraft/world/level/block/VineBlock.java b/net/minecraft/world/level/block/VineBlock.java
+index b98e720f3996d88f21f448f1fe967e4d8203170d..d8493b1c6045debacd2d3ac1857708f62830d6f6 100644
+--- a/net/minecraft/world/level/block/VineBlock.java
++++ b/net/minecraft/world/level/block/VineBlock.java
+@@ -171,9 +171,15 @@ public class VineBlock extends Block {
+                 BlockPos blockPos = pos.above();
+                 if (random1.getAxis().isHorizontal() && !state.getValue(getPropertyForFace(random1))) {
+                     if (this.canSpread(level, pos)) {
+-                        BlockPos blockPos1 = pos.relative(random1);
+-                        BlockState blockState = level.getBlockState(blockPos1);
++                        // Papercut start - optimizations
++                        int x1 = pos.getX() + random1.getStepX();
++                        int y1 = pos.getY() + random1.getStepY();
++                        int z1 = pos.getZ() + random1.getStepZ();
++                        BlockState blockState = level.papercut$getBlockState(x1, y1, z1);
++                        BlockPos blockPos1 = null;
++
+                         if (blockState.isAir()) {
++                            blockPos1 = new BlockPos(x1, y1, z1);
+                             Direction clockWise = random1.getClockWise();
+                             Direction counterClockWise = random1.getCounterClockWise();
+                             boolean value = state.getValue(getPropertyForFace(clockWise));
+@@ -197,9 +203,13 @@ public class VineBlock extends Block {
+                                 }
+                                 // CraftBukkit end
+                             }
+-                        } else if (isAcceptableNeighbour(level, blockPos1, random1)) {
+-                            org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockGrowEvent(level, pos, (BlockState) state.setValue(VineBlock.getPropertyForFace(random1), true), Block.UPDATE_CLIENTS); // CraftBukkit
++                        } else {
++                            if (blockPos1 == null) blockPos1 = new BlockPos(x1, y1, z1);
++                            if (isAcceptableNeighbour(level, blockPos1, random1)) {
++                                org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockGrowEvent(level, pos, (BlockState) state.setValue(VineBlock.getPropertyForFace(random1), true), Block.UPDATE_CLIENTS); // CraftBukkit
++                            }
+                         }
++                        // Papercut end
+                     }
+                 } else {
+                     if (random1 == Direction.UP && pos.getY() < level.getMaxY()) {
+@@ -263,17 +273,27 @@ public class VineBlock extends Block {
+     }
+ 
+     private boolean canSpread(BlockGetter level, BlockPos pos) {
+-        int i = 4;
+-        Iterable<BlockPos> iterable = BlockPos.betweenClosed(pos.getX() - 4, pos.getY() - 1, pos.getZ() - 4, pos.getX() + 4, pos.getY() + 1, pos.getZ() + 4);
+         int i1 = 5;
+-
+-        for (BlockPos blockPos : iterable) {
+-            if (level.getBlockState(blockPos).is(this)) {
+-                if (--i1 <= 0) {
+-                    return false;
++        // Papercut start - optimization
++        final int startX = pos.getX() - 4;
++        final int startY = pos.getY() - 1;
++        final int startZ = pos.getZ() - 4;
++        final int endX = pos.getX() + 4;
++        final int endY = pos.getY() + 1;
++        final int endZ = pos.getZ() + 4;
++
++        for (int x = startX; x <= endX; ++x) {
++            for (int y = startY; y <= endY; ++y) {
++                for (int z = startZ; z <= endZ; ++z) {
++                    if (level.papercut$getBlockState(x, y, z).is(this)) {
++                        if (--i1 <= 0) {
++                            return false;
++                        }
++                    }
+                 }
+             }
+         }
++        // Papercut end
+ 
+         return true;
+     }
